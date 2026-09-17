@@ -69,8 +69,10 @@ client.on('message', async (message) => {
             // Verificamos si ya le enviamos el mensaje en las últimas 12 horas (43200 segundos)
             const lastNotified = outOfHoursNotified.get(chatId) || 0;
             if (now - lastNotified > 43200) {
-                await message.reply('Hola, en este momento nuestra contadora no se encuentra disponible. Por favor comunícate mañana a partir de las 8:30 am nuevamente. ¡Gracias!');
+                // MUY IMPORTANTE: Guardar el registro INMEDIATAMENTE ANTES de enviar el mensaje.
+                // Esto previene que si llegan 2 mensajes en el mismo segundo, el bot responda 2 veces.
                 outOfHoursNotified.set(chatId, now);
+                await message.reply('Hola, en este momento nuestra contadora no se encuentra disponible. Por favor comunícate mañana a partir de las 8:30 am nuevamente. ¡Gracias!');
             }
             return;
         }
