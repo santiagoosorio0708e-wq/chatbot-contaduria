@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenerativeAI, SchemaType } = require("@google/generative-ai");
 const Bottleneck = require("bottleneck");
 const { GEMINI_API_KEY } = require('../config');
 
@@ -34,10 +34,10 @@ const tools = [
         name: "transfer_to_human",
         description: "Ejecuta esta función ÚNICAMENTE cuando el usuario solicita explícitamente hablar con un humano, asesor, contadora o dueña, o si hace una consulta muy compleja que requiere atención humana directa.",
         parameters: {
-          type: "OBJECT",
+          type: SchemaType.OBJECT,
           properties: {
             reason: {
-              type: "STRING",
+              type: SchemaType.STRING,
               description: "La razón por la cual el usuario quiere hablar con el humano."
             }
           },
@@ -49,7 +49,7 @@ const tools = [
 ];
 
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: "gemini-3.5-flash",
   systemInstruction: SYSTEM_PROMPT,
   tools: tools,
 });
