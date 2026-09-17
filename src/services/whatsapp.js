@@ -10,6 +10,8 @@ const chatHistory = new Map();
 
 // Lista de chats notificados de "fuera de horario" (chatId -> timestamp)
 const outOfHoursNotified = new Map();
+// Lista de chats notificados con la "presentación" (chatId -> timestamp)
+const presentationNotified = new Map();
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -39,9 +41,10 @@ client.on('message', async (message) => {
         // 3. FILTRO DE GRUPOS: Prohibido escribir en grupos
         if (message.from.includes('@g.us')) return;
         
-        // 4. FILTRO DE ANTIGÜEDAD (Historial): Ignoramos mensajes con más de 5 minutos de antigüedad
+        // 4. FILTRO DE ANTIGÜEDAD (Historial): Ignoramos mensajes con más de 30 minutos de antigüedad (1800 seg) 
+        // para evitar problemas si el reloj de tu PC está desfasado con la hora real.
         const now = Math.floor(Date.now() / 1000);
-        if (now - message.timestamp > 300) {
+        if (now - message.timestamp > 1800) {
             console.log(`Mensaje antiguo ignorado de: ${message.from}`);
             return;
         }
@@ -49,10 +52,11 @@ client.on('message', async (message) => {
         const chatId = message.from;
         let text = message.body.trim();
         
-        // Si mandan un audio o imagen sin texto
+        // Si mandan un audio, imagen o sticker
         if (!text) {
             if (message.type === 'ptt' || message.type === 'audio') text = "[El usuario envió un mensaje de voz]";
             else if (message.type === 'image' || message.type === 'video' || message.type === 'document') text = "[El usuario envió un archivo multimedia]";
+            else if (message.type === 'sticker') text = "[El usuario envió un sticker]";
             else return; 
         }
 
@@ -63,6 +67,17 @@ client.on('message', async (message) => {
             await message.reply('Bot reactivado para este chat.');
             return;
         }
+
+        // --- MENSAJE DE PRESENTACIÓN (CADA 3 HORAS) ---
+        // Se envía a menos que el mensaje entrante sea una imagen/foto
+        if (message.type !== 'image') {
+            const lastPresentation = presentationNotified.get(chatId) || 0;
+            if (now - lastPresentation > 10800) { // 3 horas = 10800 segundos
+                presentationNotified.set(chatId, now);
+                await message.reply('¡Hola! Bienvenido al asistente virtual del despacho de Contaduría Pública. ¿En qué te puedo asesorar hoy? (Recuerda que si necesitas hablar directamente con la contadora, solo dímelo).');
+            }
+        }
+        // ----------------------------------------------
 
         // Verificar si estamos fuera de horario
         if (!isWithinBusinessHours()) {
