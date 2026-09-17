@@ -67,20 +67,11 @@ client.on('message', async (message) => {
 
         // Verificar si estamos fuera de horario
         if (!isWithinBusinessHours()) {
-            const chat = await message.getChat();
-            
             // Verificamos si ya le enviamos el mensaje en las últimas 12 horas (43200 segundos)
             const lastNotified = outOfHoursNotified.get(chatId) || 0;
             if (now - lastNotified > 43200) {
                 await message.reply('Hola, en este momento nuestra contadora no se encuentra disponible. Por favor comunícate mañana a partir de las 8:30 am nuevamente. ¡Gracias!');
                 outOfHoursNotified.set(chatId, now);
-            }
-            
-            // Marcar SIEMPRE el chat como no leído para que la dueña lo vea al día siguiente
-            try {
-                await chat.markUnread();
-            } catch (err) {
-                console.log(`[Aviso] WhatsApp bloqueó marcar como no leído el chat ${chatId}`);
             }
             return;
         }
