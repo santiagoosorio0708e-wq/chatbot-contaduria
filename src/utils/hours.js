@@ -12,7 +12,8 @@ function isWithinBusinessHours() {
     const isMorning = timeStr >= BUSINESS_MORNING_START && timeStr <= BUSINESS_MORNING_END;
     const isAfternoon = timeStr >= BUSINESS_AFTERNOON_START && timeStr <= BUSINESS_AFTERNOON_END;
 
-    return isMorning || isAfternoon;
+    // return isMorning || isAfternoon;
+    return true; // TEMPORALMENTE ACTIVADO 24/7 PARA PRUEBAS
 }
 
 module.exports = {
