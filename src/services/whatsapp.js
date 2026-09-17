@@ -80,7 +80,11 @@ client.on('message', async (message) => {
             }
             
             // Marcar SIEMPRE el chat como no leído para que la dueña lo vea al día siguiente
-            await chat.markUnread();
+            try {
+                await chat.markUnread();
+            } catch (err) {
+                console.log(`[Aviso] WhatsApp bloqueó marcar como no leído el chat ${chatId}`);
+            }
             return;
         }
 
