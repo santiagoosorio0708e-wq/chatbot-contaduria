@@ -13,6 +13,9 @@ const outOfHoursNotified = new Map();
 // Lista de chats notificados con la "presentación" (chatId -> timestamp)
 const presentationNotified = new Map();
 
+// Capturamos el momento exacto en el que el bot arranca
+const startupTime = Math.floor(Date.now() / 1000);
+
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -41,16 +44,16 @@ client.on('message', async (message) => {
         // 3. FILTRO DE GRUPOS: Prohibido escribir en grupos
         if (message.from.includes('@g.us')) return;
         
-        // 4. FILTRO DE ANTIGÜEDAD (Historial): Ignoramos mensajes con más de 30 minutos de antigüedad (1800 seg) 
-        // para evitar problemas si el reloj de tu PC está desfasado con la hora real.
-        const now = Math.floor(Date.now() / 1000);
-        if (now - message.timestamp > 1800) {
-            console.log(`Mensaje antiguo ignorado de: ${message.from}`);
+        // 4. FILTRO DE ANTIGÜEDAD (Historial): 
+        // Simplemente ignoramos cualquier mensaje que haya sido enviado ANTES de que el bot se encendiera.
+        if (message.timestamp < startupTime) {
+            console.log(`Mensaje de historial ignorado de: ${message.from}`);
             return;
         }
 
         const chatId = message.from;
         let text = message.body.trim();
+        const now = Math.floor(Date.now() / 1000);
         
         // Si mandan un audio, imagen o sticker
         if (!text) {
