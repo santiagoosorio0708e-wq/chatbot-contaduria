@@ -14,7 +14,6 @@ const outOfHoursNotified = new Map();
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        headless: false,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
