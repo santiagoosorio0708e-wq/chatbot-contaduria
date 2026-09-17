@@ -8,6 +8,9 @@ const mutedChats = new Set();
 // Memoria de conversación por chat
 const chatHistory = new Map();
 
+// Lista de chats notificados de "fuera de horario" (chatId -> timestamp)
+const outOfHoursNotified = new Map();
+
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -40,7 +43,7 @@ client.on('message', async (message) => {
         // 3. FILTRO DE GRUPOS: Prohibido escribir en grupos
         if (message.from.includes('@g.us')) return;
         
-        // 4. FILTRO DE ANTIGÜEDAD (Historial): Ignoramos mensajes con más de 5 minutos de antigüedad para evitar responder spam viejo al prender el bot.
+        // 4. FILTRO DE ANTIGÜEDAD (Historial): Ignoramos mensajes con más de 5 minutos de antigüedad
         const now = Math.floor(Date.now() / 1000);
         if (now - message.timestamp > 300) {
             console.log(`Mensaje antiguo ignorado de: ${message.from}`);
@@ -50,26 +53,34 @@ client.on('message', async (message) => {
         const chatId = message.from;
         let text = message.body.trim();
         
-        // Si mandan un audio o imagen sin texto, evitamos que text sea indefinido
+        // Si mandan un audio o imagen sin texto
         if (!text) {
             if (message.type === 'ptt' || message.type === 'audio') text = "[El usuario envió un mensaje de voz]";
             else if (message.type === 'image' || message.type === 'video' || message.type === 'document') text = "[El usuario envió un archivo multimedia]";
-            else return; // Si no hay texto y no es archivo válido, ignorar
+            else return; 
         }
 
         // Comando oculto para reactivar el bot por la dueña
         if (text === '/reactivar') {
             mutedChats.delete(chatId);
-            chatHistory.delete(chatId); // limpiar historial
+            chatHistory.delete(chatId); 
             await message.reply('Bot reactivado para este chat.');
             return;
         }
 
         // Verificar si estamos fuera de horario
         if (!isWithinBusinessHours()) {
-            // Ya no archivamos el chat para evitar crasheos (Execution context was destroyed).
-            // Simplemente le mandamos el mensaje indicando que no está disponible.
-            await message.reply('Hola, en este momento nuestra contadora no se encuentra disponible. Por favor comunícate mañana a partir de las 8:30 am nuevamente. ¡Gracias!');
+            const chat = await message.getChat();
+            
+            // Verificamos si ya le enviamos el mensaje en las últimas 12 horas (43200 segundos)
+            const lastNotified = outOfHoursNotified.get(chatId) || 0;
+            if (now - lastNotified > 43200) {
+                await message.reply('Hola, en este momento nuestra contadora no se encuentra disponible. Por favor comunícate mañana a partir de las 8:30 am nuevamente. ¡Gracias!');
+                outOfHoursNotified.set(chatId, now);
+            }
+            
+            // Marcar SIEMPRE el chat como no leído para que la dueña lo vea al día siguiente
+            await chat.markUnread();
             return;
         }
 
