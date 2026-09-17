@@ -22,6 +22,7 @@
   "homepage": "https://github.com/santiagoosorio0708e-wq/chatbot-contaduria#readme",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "bottleneck": "^2.19.5",
     "dotenv": "^17.4.2",
     "node-cron": "^4.6.0",
     "qrcode-terminal": "^0.12.0",

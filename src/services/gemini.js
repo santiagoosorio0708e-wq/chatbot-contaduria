@@ -1,5 +1,13 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Bottleneck = require("bottleneck");
 const { GEMINI_API_KEY } = require('../config');
+
+// Límite de la API gratuita de Gemini: 15 peticiones por minuto.
+// Configuramos a máximo 14 peticiones por minuto (una cada ~4.3 segundos) para evitar bloqueos.
+const limiter = new Bottleneck({
+  minTime: 4300, 
+  maxConcurrent: 1
+});
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
@@ -46,6 +54,12 @@ const model = genAI.getGenerativeModel({
   tools: tools,
 });
 
+// Función encolada por Bottleneck para evitar límites de API
+const callGeminiAPI = limiter.wrap(async (message, history) => {
+  const chat = model.startChat({ history });
+  return await chat.sendMessage(message);
+});
+
 async function getChatbotResponse(message, conversationHistory) {
   try {
     // Generar formato de chat de Gemini
@@ -55,11 +69,8 @@ async function getChatbotResponse(message, conversationHistory) {
       parts: [{ text: msg.content }]
     }));
 
-    const chat = model.startChat({
-      history: history,
-    });
-
-    const result = await chat.sendMessage(message);
+    // Llamamos a la API a través de la cola de Bottleneck
+    const result = await callGeminiAPI(message, history);
     
     // Verificar si el modelo llamó a la herramienta transfer_to_human
     const functionCalls = result.response.functionCalls();
