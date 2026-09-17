@@ -21,9 +21,9 @@
   },
   "homepage": "https://github.com/santiagoosorio0708e-wq/chatbot-contaduria#readme",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "dotenv": "^17.4.2",
     "node-cron": "^4.6.0",
-    "openai": "^7.17.0",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.34.7"
   },

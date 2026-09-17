@@ -1,7 +1,7 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const cron = require('node-cron');
-const { getChatbotResponse } = require('./openai');
+const { getChatbotResponse } = require('./gemini');
 const { isWithinBusinessHours } = require('../utils/hours');
 
 // Lista de chats silenciados (Handoff a humano)

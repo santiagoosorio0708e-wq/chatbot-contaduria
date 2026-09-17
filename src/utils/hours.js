@@ -1,4 +1,7 @@
-const { BUSINESS_HOURS_START, BUSINESS_HOURS_END } = require('../config');
+const { 
+    BUSINESS_MORNING_START, BUSINESS_MORNING_END, 
+    BUSINESS_AFTERNOON_START, BUSINESS_AFTERNOON_END 
+} = require('../config');
 
 function isWithinBusinessHours() {
     // Obtenemos la hora actual en Colombia (Bogotá)
@@ -6,8 +9,10 @@ function isWithinBusinessHours() {
     const formatter = new Intl.DateTimeFormat('es-CO', options);
     const timeStr = formatter.format(new Date()); // ej. "14:30"
     
-    // Comparación simple de strings "HH:mm" funciona correctamente si ambos tienen el mismo formato 24h
-    return timeStr >= BUSINESS_HOURS_START && timeStr <= BUSINESS_HOURS_END;
+    const isMorning = timeStr >= BUSINESS_MORNING_START && timeStr <= BUSINESS_MORNING_END;
+    const isAfternoon = timeStr >= BUSINESS_AFTERNOON_START && timeStr <= BUSINESS_AFTERNOON_END;
+
+    return isMorning || isAfternoon;
 }
 
 module.exports = {

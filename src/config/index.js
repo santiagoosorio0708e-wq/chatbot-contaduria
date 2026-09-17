@@ -1,7 +1,9 @@
 require('dotenv').config();
 
 module.exports = {
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-    BUSINESS_HOURS_START: process.env.BUSINESS_HOURS_START || '08:00',
-    BUSINESS_HOURS_END: process.env.BUSINESS_HOURS_END || '18:00',
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    BUSINESS_MORNING_START: process.env.BUSINESS_MORNING_START || '08:30',
+    BUSINESS_MORNING_END: process.env.BUSINESS_MORNING_END || '12:30',
+    BUSINESS_AFTERNOON_START: process.env.BUSINESS_AFTERNOON_START || '14:00',
+    BUSINESS_AFTERNOON_END: process.env.BUSINESS_AFTERNOON_END || '18:00',
 };
