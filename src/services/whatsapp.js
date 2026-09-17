@@ -48,8 +48,16 @@ client.on('ready', () => {
 });
 
 client.on('message', async (message) => {
-    // Ignorar mensajes de grupos o del propio bot
-    if (message.from === 'status@broadcast' || message.from.includes('@g.us') || message.fromMe) return;
+    // Ignorar estados, mensajes del propio bot, y grupos
+    if (message.isStatus || message.from === 'status@broadcast' || message.from.includes('@g.us') || message.fromMe) return;
+
+    // MUY IMPORTANTE: Ignorar mensajes antiguos (historial sincronizado al conectar el bot)
+    // Comparamos el timestamp del mensaje con el tiempo actual. Si tiene más de 2 minutos (120 seg) de antigüedad, lo ignoramos.
+    const now = Math.floor(Date.now() / 1000);
+    if (now - message.timestamp > 120) {
+        console.log(`Mensaje antiguo ignorado de: ${message.from}`);
+        return;
+    }
 
     const chatId = message.from;
     const text = message.body.trim();
