@@ -19,7 +19,11 @@ const startupTime = Math.floor(Date.now() / 1000);
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        // Ejecutamos con Sandbox activado por defecto (mayor seguridad). 
+        // Solo lo deshabilitamos si el entorno lo exige explícitamente (ej: Docker o Heroku).
+        args: process.env.PUPPETEER_NO_SANDBOX === 'true' 
+            ? ['--no-sandbox', '--disable-setuid-sandbox'] 
+            : []
     }
 });
 

@@ -1,5 +1,10 @@
 require('dotenv').config();
 
+if (!process.env.GEMINI_API_KEY) {
+    console.error("FATAL ERROR: La variable de entorno GEMINI_API_KEY no está definida. Revisa tu archivo .env");
+    process.exit(1);
+}
+
 module.exports = {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     BUSINESS_MORNING_START: process.env.BUSINESS_MORNING_START || '08:30',
