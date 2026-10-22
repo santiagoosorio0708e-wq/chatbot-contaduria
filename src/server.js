@@ -406,8 +406,8 @@ function startWebServer() {
     const server = http.createServer((req, res) => {
         const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
         
-        // 1. Healthcheck para Render y monitores externos (UptimeRobot, BetterStack, cron-job)
-        if (url.pathname === '/health' || url.pathname === '/ping') {
+        // 1. Healthcheck para Render y monitores externos (soporta /health, /healthz, /ping, /healthcheck)
+        if (url.pathname === '/health' || url.pathname === '/healthz' || url.pathname === '/ping' || url.pathname === '/healthcheck') {
             res.writeHead(200, { 
                 'Content-Type': 'application/json; charset=utf-8',
                 'Cache-Control': 'no-cache, no-store, must-revalidate'
@@ -453,8 +453,8 @@ function startWebServer() {
     });
 
     server.listen(PORT, '0.0.0.0', () => {
-        console.log(`[Web Server] Servidor web listo en el puerto ${PORT} (http://0.0.0.0:${PORT})`);
-        console.log(`[Web Server] Escaneo visual de QR disponible en: http://localhost:${PORT}/qr`);
+        console.log(`[Web Server] Servidor web listo en el puerto ${PORT}`);
+        console.log(`[Web Server] Escaneo visual disponible en: /qr`);
     });
 
     return server;

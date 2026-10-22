@@ -8,4 +8,10 @@ startWebServer();
 
 // 2. Iniciar cliente de WhatsApp Web
 startWhatsAppClient();
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[Process] Unhandled Rejection:', reason);
+});
 
+process.on('uncaughtException', (err) => {
+    console.error('[Process] Uncaught Exception:', err);
+});

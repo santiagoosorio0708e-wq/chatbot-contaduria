@@ -49,6 +49,10 @@ client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
 });
 
+client.on('loading_screen', (percent, message) => {
+    console.log(`[WhatsApp Cargando] ${percent}% - ${message}`);
+});
+
 client.on('authenticated', () => {
     console.log('Cliente autenticado exitosamente en WhatsApp!');
 });
@@ -175,7 +179,11 @@ client.on('message', async (message) => {
 });
 
 const startWhatsAppClient = () => {
-    client.initialize();
+    console.log('[WhatsApp] Iniciando cliente de WhatsApp Web con Puppeteer...');
+    client.initialize().catch(err => {
+        console.error('[WhatsApp Error al inicializar]:', err);
+        botStatus = 'error';
+    });
 };
 
 const getBotStatus = () => botStatus;
