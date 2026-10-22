@@ -43,7 +43,7 @@ function renderDashboardHtml(status, qr) {
             </div>
         `;
     } else if (status === 'qr_ready' && qr) {
-        autoRefreshSec = 10;
+        autoRefreshSec = 0; // Se maneja dinámicamente con AJAX para no parpadear la pantalla
         statusBadge = `
             <div class="badge badge-warning">
                 <span class="indicator pulse-amber"></span>
@@ -54,7 +54,7 @@ function renderDashboardHtml(status, qr) {
         mainContent = `
             <div class="status-card-inner">
                 <div class="qr-container">
-                    <img src="${qrImgUrl}" alt="Código QR WhatsApp" class="qr-image" />
+                    <img id="qr-image-display" src="${qrImgUrl}" alt="Código QR WhatsApp" class="qr-image" />
                 </div>
                 <h3>Escanea con tu WhatsApp</h3>
                 <ol class="instructions-list">
@@ -62,7 +62,7 @@ function renderDashboardHtml(status, qr) {
                     <li>Toca <strong>Dispositivos vinculados</strong> en Configuración / Menú.</li>
                     <li>Toca <strong>Vincular un dispositivo</strong> y apunta tu cámara a este código.</li>
                 </ol>
-                <p class="refresh-note">⏳ La página se actualiza automáticamente cada ${autoRefreshSec}s para renovar el código o confirmar la conexión.</p>
+                <p class="refresh-note">⏳ Apunta la cámara de tu celular. El código es estable y la conexión se confirmará automáticamente.</p>
             </div>
         `;
     } else if (status === 'disconnected') {
@@ -398,6 +398,35 @@ function renderDashboardHtml(status, qr) {
             Endpoint de monitoreo 24/7 activo en <code>/health</code>
         </footer>
     </div>
+    <script>
+        const initialStatus = '${status}';
+        let currentQrString = ${JSON.stringify(qr || '')};
+
+        setInterval(async () => {
+            try {
+                const res = await fetch('/status');
+                if (!res.ok) return;
+                const data = await res.json();
+
+                // Si el estado del bot cambió (ej. de qr_ready a ready), recargar suavemente
+                if (data.whatsappStatus !== initialStatus) {
+                    window.location.reload();
+                    return;
+                }
+
+                // Si hay un nuevo código QR y cambió, actualizar solo el src de la imagen sin recargar
+                if (data.qr && data.qr !== currentQrString) {
+                    currentQrString = data.qr;
+                    const img = document.getElementById('qr-image-display');
+                    if (img) {
+                        img.src = 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(data.qr) + '&size=300x300&margin=10';
+                    } else {
+                        window.location.reload();
+                    }
+                }
+            } catch (e) {}
+        }, 2500);
+    </script>
 </body>
 </html>`;
 }
@@ -431,6 +460,7 @@ function startWebServer() {
                 status: 'running',
                 whatsappStatus: getBotStatus(),
                 hasQr: Boolean(getLatestQr()),
+                qr: getLatestQr() || null,
                 timestamp: new Date().toISOString()
             }));
         }
