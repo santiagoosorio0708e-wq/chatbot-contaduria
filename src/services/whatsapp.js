@@ -13,27 +13,71 @@ const outOfHoursNotified = new Map();
 // Lista de chats notificados con la "presentación" (chatId -> timestamp)
 const presentationNotified = new Map();
 
+// Estado global del cliente para el panel de monitoreo y Render
+let botStatus = 'initializing';
+let latestQr = null;
+
 // Capturamos el momento exacto en el que el bot arranca
 const startupTime = Math.floor(Date.now() / 1000);
 
+// Flags optimizados para entornos de producción (Docker / Render / Linux) y locales
+const puppeteerArgs = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--no-first-run',
+    '--no-zygote',
+    '--disable-gpu'
+];
+
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({
+        dataPath: process.env.WWEBJS_DATA_PATH || './.wwebjs_auth'
+    }),
     puppeteer: {
-        // Ejecutamos con Sandbox activado por defecto (mayor seguridad). 
-        // Solo lo deshabilitamos si el entorno lo exige explícitamente (ej: Docker o Heroku).
-        args: process.env.PUPPETEER_NO_SANDBOX === 'true' 
-            ? ['--no-sandbox', '--disable-setuid-sandbox'] 
-            : []
+        headless: true,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        args: puppeteerArgs
     }
 });
 
 client.on('qr', (qr) => {
-    console.log('QR Code recibido, escanea por favor:');
+    latestQr = qr;
+    botStatus = 'qr_ready';
+    console.log('QR Code recibido, escanea por favor en terminal o en el panel web /qr:');
     qrcode.generate(qr, { small: true });
+});
+
+client.on('authenticated', () => {
+    console.log('Cliente autenticado exitosamente en WhatsApp!');
+});
+
+client.on('auth_failure', (msg) => {
+    console.error('Error de autenticación en WhatsApp:', msg);
+    botStatus = 'auth_failure';
+    latestQr = null;
 });
 
 client.on('ready', () => {
     console.log('Cliente de WhatsApp listo y conectado!');
+    botStatus = 'ready';
+    latestQr = null;
+});
+
+client.on('disconnected', (reason) => {
+    console.warn(`Cliente desconectado de WhatsApp. Razón: ${reason}`);
+    botStatus = 'disconnected';
+    latestQr = null;
+    
+    // Intento de reconexión automática tras unos segundos
+    setTimeout(() => {
+        console.log('Intentando re-inicializar cliente de WhatsApp...');
+        try {
+            client.destroy().catch(() => {});
+        } catch (e) {}
+        client.initialize();
+    }, 5000);
 });
 
 client.on('message', async (message) => {
@@ -134,6 +178,12 @@ const startWhatsAppClient = () => {
     client.initialize();
 };
 
+const getBotStatus = () => botStatus;
+const getLatestQr = () => latestQr;
+
 module.exports = {
-    startWhatsAppClient
+    startWhatsAppClient,
+    getBotStatus,
+    getLatestQr
 };
+

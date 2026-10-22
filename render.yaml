@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: chatbot-contaduria
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: BUSINESS_MORNING_START
+        value: "08:30"
+      - key: BUSINESS_MORNING_END
+        value: "12:30"
+      - key: BUSINESS_AFTERNOON_START
+        value: "14:00"
+      - key: BUSINESS_AFTERNOON_END
+        value: "18:00"
