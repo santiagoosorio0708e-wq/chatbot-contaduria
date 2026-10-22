@@ -5,8 +5,9 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable \
     NODE_ENV=production
 
-# Instalar dependencias necesarias y Google Chrome Stable oficial
+# Instalar dependencias necesarias, dumb-init y Google Chrome Stable oficial
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    dumb-init \
     wget \
     gnupg \
     ca-certificates \
@@ -60,6 +61,9 @@ COPY . .
 
 # Puerto por defecto (Render inyectará la variable de entorno PORT)
 EXPOSE 3000
+
+# Usar dumb-init como PID 1 para manejar señales y recolectar procesos zombies de Chrome
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 
 # Arrancar la aplicación
 CMD ["npm", "start"]
