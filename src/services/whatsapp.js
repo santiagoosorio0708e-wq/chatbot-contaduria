@@ -20,7 +20,7 @@ let latestQr = null;
 // Capturamos el momento exacto en el que el bot arranca
 const startupTime = Math.floor(Date.now() / 1000);
 
-// Flags optimizados para entornos de producción (Docker / Render / Linux) y locales
+// Flags optimizados para entornos de producción de 512MB RAM (Docker / Render / Linux)
 const puppeteerArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -28,7 +28,16 @@ const puppeteerArgs = [
     '--disable-accelerated-2d-canvas',
     '--no-first-run',
     '--no-zygote',
-    '--disable-gpu'
+    '--disable-gpu',
+    '--hide-scrollbars',
+    '--disable-infobars',
+    '--disable-extensions',
+    '--disable-plugins',
+    '--disable-canvas-aa',
+    '--disable-2d-canvas-clip-aa',
+    '--disable-gl-drawing-for-tests',
+    '--memory-pressure-off',
+    '--renderer-process-limit=1'
 ];
 
 const client = new Client({
