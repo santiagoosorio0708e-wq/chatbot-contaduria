@@ -28,6 +28,7 @@ const puppeteerArgs = [
     '--disable-accelerated-2d-canvas',
     '--no-first-run',
     '--no-zygote',
+    '--single-process',
     '--disable-gpu',
     '--hide-scrollbars',
     '--disable-infobars',
@@ -37,6 +38,8 @@ const puppeteerArgs = [
     '--disable-2d-canvas-clip-aa',
     '--disable-gl-drawing-for-tests',
     '--memory-pressure-off',
+    '--disable-features=site-per-process,TranslateUI,BlinkGenPropertyTrees',
+    '--disable-site-isolation-trials',
     '--renderer-process-limit=1'
 ];
 
