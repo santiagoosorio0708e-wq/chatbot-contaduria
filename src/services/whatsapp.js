@@ -42,10 +42,6 @@ const client = new Client({
     authStrategy: new LocalAuth({
         dataPath: process.env.WWEBJS_DATA_PATH || './.wwebjs_auth'
     }),
-    webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1045821369-alpha.html'
-    },
     takeoverOnConflict: true,
     takeoverTimeoutMs: 0,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -85,17 +81,20 @@ client.on('ready', () => {
 });
 
 client.on('disconnected', (reason) => {
-    console.warn(`Cliente desconectado de WhatsApp. Razón: ${reason}`);
+    console.warn(`[WhatsApp] Cliente desconectado. Razón: ${reason}`);
     botStatus = 'disconnected';
     latestQr = null;
     
-    // Intento de reconexión automática tras unos segundos
+    // Intento de reconexión automática tras 5 segundos
     setTimeout(() => {
-        console.log('Intentando re-inicializar cliente de WhatsApp...');
+        console.log('[WhatsApp] Intentando re-inicializar cliente de WhatsApp...');
         try {
-            client.destroy().catch(() => {});
-        } catch (e) {}
-        client.initialize();
+            client.initialize().catch(err => {
+                console.error('[WhatsApp Error al re-inicializar]:', err);
+            });
+        } catch (e) {
+            console.error('[WhatsApp Error]:', e);
+        }
     }, 5000);
 });
 
