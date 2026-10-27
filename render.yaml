@@ -1,10 +1,12 @@
 services:
   - type: web
     name: chatbot-contaduria
-    runtime: docker
+    env: docker
+    dockerfilePath: ./Dockerfile
     plan: free
     region: oregon
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: PORT
         value: 3000

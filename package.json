@@ -1,18 +1,28 @@
 {
   "name": "chatbot-contador",
   "version": "1.0.0",
-  "description": "",
+  "description": "Chatbot asistente virtual para despacho de Contaduría Pública con WhatsApp Web y Google Gemini",
   "main": "index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
-    "start": "node --max-old-space-size=256 index.js",
+    "start": "node --max-old-space-size=192 index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/santiagoosorio0708e-wq/chatbot-contaduria.git"
   },
-  "keywords": [],
+  "keywords": [
+    "whatsapp",
+    "chatbot",
+    "contaduria",
+    "gemini",
+    "render",
+    "puppeteer"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

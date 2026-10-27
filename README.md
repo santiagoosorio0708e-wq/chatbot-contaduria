@@ -90,22 +90,25 @@ chatbot-contador/
 ├── .dockerignore              # Archivos excluidos del contenedor Docker
 ├── .env.example               # Plantilla de variables de entorno seguras
 ├── .gitignore                 # Reglas de exclusión de Git (claves y sesiones)
-├── Dockerfile                 # Imagen Docker con Chrome Headless oficial
-├── index.js                   # Punto de entrada principal (Web + WhatsApp)
-├── package.json               # Manifiesto de dependencias y scripts
+├── Dockerfile                 # Imagen Docker optimizada con Chrome Headless oficial
+├── index.js                   # Punto de entrada principal (Web + WhatsApp + Graceful Shutdown)
+├── package.json               # Manifiesto de dependencias, engines y scripts de memoria
 ├── render.yaml                # Especificación Blueprint para despliegue en Render
 ├── list_models.js             # Utilidad para consultar modelos de Gemini disponibles
 ├── test.js                    # Prueba unitaria del servicio Gemini
 ├── test_all.js                # Prueba comparativa de latencia en modelos
+├── test_security.js           # Suite de pruebas de seguridad (Anti-Prototype Pollution, XSS, etc.)
+├── test_server.js             # Suite de pruebas HTTP, Healthcheck y cabeceras de Render
 └── src/
     ├── config/
-    │   └── index.js           # Carga y validación estricta de variables de entorno
-    ├── server.js              # Servidor HTTP: /health, /status y panel visual /qr
+    │   └── index.js           # Carga, validación estricta y fallback de variables
+    ├── server.js              # Servidor HTTP seguro: /health, /status, Rate Limiting y CSP
     ├── services/
-    │   ├── gemini.js          # Integración de IA, Function Calling y Bottleneck
-    │   └── whatsapp.js        # Cliente de WhatsApp, filtros, estados y eventos
+    │   ├── gemini.js          # Integración de IA con defensas contra Prompt Injection
+    │   └── whatsapp.js        # Cliente de WhatsApp Web optimizado para 512MB RAM
     └── utils/
-        └── hours.js           # Validador de horario laboral (Bogotá UTC-5)
+        ├── hours.js           # Validador de horario laboral (Bogotá UTC-5)
+        └── security.js        # Módulo de seguridad Node.js/JSON (Safe JSON, Rate Limit, Sanitización)
 ```
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
@@ -231,11 +234,20 @@ El plan gratuito de Render suspende los servicios web tras 15 minutos de inactiv
 
 ## 🧪 Pruebas
 
-El proyecto cuenta con scripts de validación listos para usar:
+El proyecto cuenta con suites de pruebas automatizadas listas para ejecutar:
 
-* **Probar conexión con Gemini:**
+* **Pruebas de Seguridad Integral (Node.js & JSON):**
   ```bash
-  node test.js
+  node test_security.js
+  ```
+* **Pruebas del Servidor HTTP y Compatibilidad con Render:**
+  ```bash
+  node test_server.js
+  ```
+* **Probar conexión con Gemini AI:**
+  ```bash
+  npm test
+  # o también: node test.js
   ```
 * **Evaluar latencia de modelos de IA:**
   ```bash
@@ -257,8 +269,11 @@ El proyecto cuenta con scripts de validación listos para usar:
 - [x] Manejador de horarios laborales y mensajes automáticos fuera de horario.
 - [x] Filtrado de chats grupales y mensajes previos al inicio.
 - [x] Servidor HTTP integrado para healthcheck y panel web visual `/qr`.
-- [x] Empaquetado Docker con Google Chrome Stable para Render.
-- [x] Configuración de despliegue mediante `render.yaml`.
+- [x] Blindaje de seguridad en Node.js y JSON (Anti-Prototype Pollution, Sanitización, Censura de claves).
+- [x] Cabeceras de seguridad CSP, nosniff, DENY y Rate Limiting por IP nativo.
+- [x] Optimización de memoria en Puppeteer y Node (192MB heap) para el tier gratuito (512MB RAM) de Render.
+- [x] Instalación directa de Google Chrome en Dockerfile evitando fallos de repositorios APT.
+- [x] Apagado elegante (*Graceful Shutdown*) con manejo de `SIGTERM`/`SIGINT`.
 - [ ] Soporte para almacenamiento persistente con Render Disks o RemoteAuth.
 - [ ] Transcripción automática de notas de voz entrantes usando Gemini Audio.
 - [ ] Panel administrativo con métricas de clientes atendidos.

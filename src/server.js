@@ -1,13 +1,49 @@
 const http = require('http');
 const { getBotStatus, getLatestQr } = require('./services/whatsapp');
-const { BUSINESS_MORNING_START, BUSINESS_MORNING_END, BUSINESS_AFTERNOON_START, BUSINESS_AFTERNOON_END } = require('./config');
+const { 
+    PORT, 
+    IS_CONFIGURED, 
+    BUSINESS_MORNING_START, 
+    BUSINESS_MORNING_END, 
+    BUSINESS_AFTERNOON_START, 
+    BUSINESS_AFTERNOON_END 
+} = require('./config');
+const { 
+    safeJsonStringify, 
+    escapeHtml, 
+    serializeForScript, 
+    createRateLimiter 
+} = require('./utils/security');
 
-const PORT = process.env.PORT || 3000;
+// Limitadores de velocidad en memoria para prevenir DoS y fuerza bruta
+const apiRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 60 });
+const healthRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 180 }); // Amplio para sondas de Render
+
+// Encabezados de seguridad reforzados (equivalente a Helmet pero nativo sin sobrecarga)
+const SECURITY_HEADERS = {
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self';",
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '0',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'geolocation=(), camera=(), microphone=()',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+};
 
 function renderDashboardHtml(status, qr) {
     let statusBadge = '';
     let mainContent = '';
     let autoRefreshSec = 0;
+
+    const safeStatus = escapeHtml(status || 'initializing');
+    const safeMorningStart = escapeHtml(BUSINESS_MORNING_START);
+    const safeMorningEnd = escapeHtml(BUSINESS_MORNING_END);
+    const safeAfternoonStart = escapeHtml(BUSINESS_AFTERNOON_START);
+    const safeAfternoonEnd = escapeHtml(BUSINESS_AFTERNOON_END);
 
     if (status === 'ready') {
         statusBadge = `
@@ -33,17 +69,17 @@ function renderDashboardHtml(status, qr) {
                     </div>
                     <div class="metric-item">
                         <span class="metric-label">Horario Mañana</span>
-                        <span class="metric-value">${BUSINESS_MORNING_START} - ${BUSINESS_MORNING_END}</span>
+                        <span class="metric-value">${safeMorningStart} - ${safeMorningEnd}</span>
                     </div>
                     <div class="metric-item">
                         <span class="metric-label">Horario Tarde</span>
-                        <span class="metric-value">${BUSINESS_AFTERNOON_START} - ${BUSINESS_AFTERNOON_END}</span>
+                        <span class="metric-value">${safeAfternoonStart} - ${safeAfternoonEnd}</span>
                     </div>
                 </div>
             </div>
         `;
     } else if (status === 'qr_ready' && qr) {
-        autoRefreshSec = 0; // Se maneja dinámicamente con AJAX para no parpadear la pantalla
+        autoRefreshSec = 0;
         statusBadge = `
             <div class="badge badge-warning">
                 <span class="indicator pulse-amber"></span>
@@ -62,11 +98,11 @@ function renderDashboardHtml(status, qr) {
                     <li>Toca <strong>Dispositivos vinculados</strong> en Configuración / Menú.</li>
                     <li>Toca <strong>Vincular un dispositivo</strong> y apunta tu cámara a este código.</li>
                 </ol>
-                <p class="refresh-note">⏳ Apunta la cámara de tu celular. El código es estable y la conexión se confirmará automáticamente.</p>
+                <p class="refresh-note">⏳ Apunta la cámara de tu celular. El panel actualizará automáticamente al sincronizar.</p>
             </div>
         `;
     } else if (status === 'disconnected') {
-        autoRefreshSec = 5;
+        autoRefreshSec = 6;
         statusBadge = `
             <div class="badge badge-danger">
                 <span class="indicator pulse-red"></span>
@@ -87,7 +123,7 @@ function renderDashboardHtml(status, qr) {
             </div>
         `;
     } else {
-        autoRefreshSec = 6;
+        autoRefreshSec = 5;
         statusBadge = `
             <div class="badge badge-info">
                 <span class="indicator pulse-blue"></span>
@@ -104,12 +140,15 @@ function renderDashboardHtml(status, qr) {
         `;
     }
 
+    const scriptSafeStatus = serializeForScript(status || '');
+    const scriptSafeQr = serializeForScript(qr || '');
+
     return `<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Control | Chatbot Contaduría Pública</title>
+    <title>Panel de Control Seguro | Chatbot Contaduría Pública</title>
     ${autoRefreshSec > 0 ? `<meta http-equiv="refresh" content="${autoRefreshSec}">` : ''}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -374,14 +413,11 @@ function renderDashboardHtml(status, qr) {
             background: rgba(0, 0, 0, 0.15);
         }
 
-        .footer a {
-            color: #38bdf8;
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
-        .footer a:hover {
-            color: #7dd3fc;
+        .footer code {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 2px 6px;
+            border-radius: 6px;
+            color: #cbd5e1;
         }
     </style>
 </head>
@@ -395,12 +431,12 @@ function renderDashboardHtml(status, qr) {
             ${mainContent}
         </main>
         <footer class="footer">
-            Endpoint de monitoreo 24/7 activo en <code>/health</code>
+            Monitoreo activo y seguro en <code>/health</code>
         </footer>
     </div>
     <script>
-        const initialStatus = '${status}';
-        let currentQrString = ${JSON.stringify(qr || '')};
+        const initialStatus = ${scriptSafeStatus};
+        let currentQrString = ${scriptSafeQr};
 
         setInterval(async () => {
             try {
@@ -408,13 +444,11 @@ function renderDashboardHtml(status, qr) {
                 if (!res.ok) return;
                 const data = await res.json();
 
-                // Si el estado del bot cambió (ej. de qr_ready a ready), recargar suavemente
                 if (data.whatsappStatus !== initialStatus) {
                     window.location.reload();
                     return;
                 }
 
-                // Si hay un nuevo código QR y cambió, actualizar solo el src de la imagen sin recargar
                 if (data.qr && data.qr !== currentQrString) {
                     currentQrString = data.qr;
                     const img = document.getElementById('qr-image-display');
@@ -433,58 +467,106 @@ function renderDashboardHtml(status, qr) {
 
 function startWebServer() {
     const server = http.createServer((req, res) => {
-        const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-        
-        // 1. Healthcheck para Render y monitores externos (soporta /health, /healthz, /ping, /healthcheck)
-        if (url.pathname === '/health' || url.pathname === '/healthz' || url.pathname === '/ping' || url.pathname === '/healthcheck') {
-            res.writeHead(200, { 
-                'Content-Type': 'application/json; charset=utf-8',
-                'Cache-Control': 'no-cache, no-store, must-revalidate'
-            });
-            return res.end(JSON.stringify({ 
-                status: 'ok', 
-                service: 'chatbot-contaduria',
-                uptimeSeconds: Math.floor(process.uptime()),
-                whatsappStatus: getBotStatus(),
-                timestamp: new Date().toISOString()
-            }));
+        // 1. Validar longitud de URL para mitigar ataques de DoS / Buffer
+        if (req.url && req.url.length > 2048) {
+            res.writeHead(414, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('414 URI Too Long');
         }
 
-        // 2. Estado en formato JSON
-        if (url.pathname === '/status') {
-            res.writeHead(200, { 
+        // 2. Aplicar encabezados de seguridad a todas las respuestas
+        for (const [header, val] of Object.entries(SECURITY_HEADERS)) {
+            res.setHeader(header, val);
+        }
+
+        // 3. Restringir métodos HTTP: únicamente permitir GET y HEAD
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+            res.writeHead(405, { 
                 'Content-Type': 'application/json; charset=utf-8',
-                'Cache-Control': 'no-cache, no-store, must-revalidate'
+                'Allow': 'GET, HEAD' 
             });
-            return res.end(JSON.stringify({
+            return res.end(safeJsonStringify({ error: 'Método no permitido. Solo se aceptan solicitudes GET o HEAD.' }));
+        }
+
+        const clientIp = req.headers['x-forwarded-for'] 
+            ? req.headers['x-forwarded-for'].split(',')[0].trim() 
+            : (req.socket.remoteAddress || '127.0.0.1');
+
+        let pathname = '/';
+        try {
+            const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+            pathname = parsedUrl.pathname;
+        } catch (urlErr) {
+            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('400 Bad Request');
+        }
+
+        // 4. Endpoint de Healthcheck para Render (Soporta /health, /healthz, /ping)
+        if (pathname === '/health' || pathname === '/healthz' || pathname === '/ping' || pathname === '/healthcheck') {
+            if (!healthRateLimiter(clientIp)) {
+                res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
+                return res.end(safeJsonStringify({ error: 'Demasiadas solicitudes de monitoreo.' }));
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            if (req.method === 'HEAD') return res.end();
+
+            const healthPayload = {
+                status: 'ok',
+                service: 'chatbot-contaduria',
+                uptimeSeconds: Math.floor(process.uptime()),
+                memoryUsageMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+                whatsappStatus: getBotStatus(),
+                isConfigured: IS_CONFIGURED,
+                timestamp: new Date().toISOString()
+            };
+            return res.end(safeJsonStringify(healthPayload));
+        }
+
+        // 5. Aplicar Rate Limit general a rutas de consulta de estado y panel web
+        if (!apiRateLimiter(clientIp)) {
+            res.writeHead(429, { 
+                'Content-Type': 'application/json; charset=utf-8',
+                'Retry-After': '60'
+            });
+            return res.end(safeJsonStringify({ error: 'Límite de solicitudes excedido. Intenta más tarde.' }));
+        }
+
+        // 6. Endpoint de estado en JSON estructurado y seguro
+        if (pathname === '/status') {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            if (req.method === 'HEAD') return res.end();
+
+            const statusPayload = {
                 status: 'running',
                 whatsappStatus: getBotStatus(),
                 hasQr: Boolean(getLatestQr()),
                 qr: getLatestQr() || null,
+                isConfigured: IS_CONFIGURED,
                 timestamp: new Date().toISOString()
-            }));
+            };
+            return res.end(safeJsonStringify(statusPayload));
         }
 
-        // 3. Panel Web visual (interfaz para escanear QR o verificar estado)
-        if (url.pathname === '/qr' || url.pathname === '/') {
+        // 7. Panel Web seguro para escanear QR
+        if (pathname === '/qr' || pathname === '/') {
             const status = getBotStatus();
             const qr = getLatestQr();
 
-            res.writeHead(200, { 
-                'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'no-cache, no-store, must-revalidate'
-            });
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            if (req.method === 'HEAD') return res.end();
+
             return res.end(renderDashboardHtml(status, qr));
         }
 
-        // 4. Ruta no encontrada
-        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('404 Not Found');
+        // 8. Ruta no encontrada (404)
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(safeJsonStringify({ error: 'Ruta no encontrada' }));
     });
 
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`[Web Server] Servidor web listo en el puerto ${PORT}`);
-        console.log(`[Web Server] Escaneo visual disponible en: /qr`);
+        console.log(`[Web Server] Healthcheck operativo en: /health`);
+        console.log(`[Web Server] Panel de vinculación QR en: /qr`);
     });
 
     return server;
