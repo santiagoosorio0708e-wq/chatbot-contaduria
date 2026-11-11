@@ -57,7 +57,9 @@ let latestQr = null;
 // Capturamos el momento exacto en el que el bot arranca
 const startupTime = Math.floor(Date.now() / 1000);
 
-// Flags optimizados y limpios para ejecutar Chromium en Linux y Docker sin estrangular V8
+// Flags optimizados y limpios para ejecutar Chromium en Linux y Docker
+// Incluye --disable-blink-features=AutomationControlled para ocultar navigator.webdriver
+// y prevenir que WhatsApp rechace el emparejamiento con 'no conectado / revise la conexión'
 const puppeteerArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -66,7 +68,8 @@ const puppeteerArgs = [
     '--no-first-run',
     '--disable-gpu',
     '--mute-audio',
-    '--no-default-browser-check'
+    '--no-default-browser-check',
+    '--disable-blink-features=AutomationControlled'
 ];
 
 let client = null;
@@ -82,9 +85,10 @@ function createClientInstance() {
         authTimeoutMs: 120000, // 120 segundos para evitar timeouts prematuros de WebSocket
         takeoverOnConflict: true,
         takeoverTimeoutMs: 0,
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
         puppeteer: {
             headless: true,
+            bypassCSP: true,
             protocolTimeout: 300000,
             executablePath: PUPPETEER_EXECUTABLE_PATH || undefined,
             args: puppeteerArgs

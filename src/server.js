@@ -99,6 +99,14 @@ function renderDashboardHtml(status, qr) {
                     <li>Toca <strong>Vincular un dispositivo</strong> y apunta tu cámara a este código.</li>
                 </ol>
                 <p class="refresh-note">⏳ Apunta la cámara de tu celular. El panel actualizará automáticamente al sincronizar.</p>
+                <div style="margin-top: 14px; font-size: 0.78rem; color: #94a3b8; text-align: left; background: rgba(0,0,0,0.25); border-radius: 10px; padding: 10px 14px; width: 100%;">
+                    <strong style="color: #cbd5e1;">💡 ¿Tu WhatsApp dice que revises la conexión?</strong>
+                    <ul style="padding-left: 18px; margin-top: 4px; line-height: 1.5;">
+                        <li>Revisa en WhatsApp que no tengas el límite de 4 dispositivos vinculados.</li>
+                        <li>Desactiva VPN o prueba cambiando un momento entre Wi-Fi y datos móviles.</li>
+                        <li>Asegúrate de escanear el código QR apenas se actualice en pantalla.</li>
+                    </ul>
+                </div>
             </div>
         `;
     } else if (status === 'disconnected') {
