@@ -186,11 +186,25 @@ client.on('message', async (message) => {
         // Sanitización rigurosa de la entrada
         const text = sanitizeInput(rawText, 1000);
 
+        // Función auxiliar para envío seguro con fallback directo
+        const safeSend = async (content) => {
+            try {
+                await message.reply(content);
+            } catch (replyErr) {
+                console.warn('[WhatsApp] message.reply falló, intentando client.sendMessage directo...');
+                try {
+                    await client.sendMessage(chatId, content);
+                } catch (sendErr) {
+                    console.error('[WhatsApp Error crítico al enviar]:', redactSensitiveData(sendErr));
+                }
+            }
+        };
+
         // Comando oculto para reactivar el bot por la contadora
         if (text === '/reactivar') {
             mutedChats.delete(chatId);
             chatHistory.delete(chatId); 
-            await message.reply('Bot reactivado para este chat.');
+            await safeSend('Bot reactivado para este chat.');
             return;
         }
 
@@ -200,7 +214,7 @@ client.on('message', async (message) => {
             const lastNotified = outOfHoursNotified.get(chatId) || 0;
             if (now - lastNotified > 43200) { // 12 horas
                 outOfHoursNotified.set(chatId, now);
-                await message.reply('Hola, en este momento nuestra contadora no se encuentra disponible. Por favor comunícate mañana a partir de las 8:30 am nuevamente. ¡Gracias!');
+                await safeSend('Hola, en este momento nuestra contadora no se encuentra disponible. Por favor comunícate mañana a partir de las 8:30 am nuevamente. ¡Gracias!');
             }
             return;
         }
@@ -211,7 +225,7 @@ client.on('message', async (message) => {
             const lastPresentation = presentationNotified.get(chatId) || 0;
             if (now - lastPresentation > 10800) { // 3 horas = 10800 segundos
                 presentationNotified.set(chatId, now);
-                await message.reply('¡Hola! Bienvenido al asistente virtual del despacho de Contaduría Pública. ¿En qué te puedo asesorar hoy? (Recuerda que si necesitas hablar directamente con la contadora, solo dímelo).');
+                await safeSend('¡Hola! Bienvenido al asistente virtual del despacho de Contaduría Pública. ¿En qué te puedo asesorar hoy? (Recuerda que si necesitas hablar directamente con la contadora, solo dímelo).');
             }
         }
 
@@ -227,7 +241,7 @@ client.on('message', async (message) => {
         const response = await getChatbotResponse(text, history);
 
         // Enviar respuesta
-        await message.reply(response.text);
+        await safeSend(response.text);
 
         // Actualizar historial
         history.push({ role: 'user', content: text });
