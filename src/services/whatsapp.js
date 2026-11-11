@@ -1,9 +1,34 @@
+const fs = require('fs');
+const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { getChatbotResponse } = require('./gemini');
 const { isWithinBusinessHours } = require('../utils/hours');
 const { sanitizeInput, redactSensitiveData } = require('../utils/security');
 const { PUPPETEER_EXECUTABLE_PATH, WWEBJS_DATA_PATH } = require('../config');
+
+// Limpieza proactiva de bloqueos residuales de Chromium (SingletonLock/DevToolsActivePort)
+// que impiden que Chrome arranque tras reinicios inesperados en contenedores o Render
+function cleanupChromeLocks(baseDir) {
+    if (!baseDir || !fs.existsSync(baseDir)) return;
+    try {
+        const scanAndClean = (dir) => {
+            const files = fs.readdirSync(dir, { withFileTypes: true });
+            for (const file of files) {
+                const fullPath = path.join(dir, file.name);
+                if (file.isDirectory()) {
+                    scanAndClean(fullPath);
+                } else if (file.name.startsWith('Singleton') || file.name === 'DevToolsActivePort') {
+                    try {
+                        fs.unlinkSync(fullPath);
+                        console.log(`[WhatsApp] Archivo residual de bloqueo eliminado: ${file.name}`);
+                    } catch (e) {}
+                }
+            }
+        };
+        scanAndClean(baseDir);
+    } catch (e) {}
+}
 
 // Estructuras de control en memoria con límites para evitar fugas de memoria (Memory Leaks en 512MB RAM)
 const MAX_STORED_CHATS = 500;
@@ -32,7 +57,7 @@ let latestQr = null;
 // Capturamos el momento exacto en el que el bot arranca
 const startupTime = Math.floor(Date.now() / 1000);
 
-// Flags ultra-optimizados para ejecutar Chromium en entornos restringidos de memoria (512MB Render Free Tier)
+// Flags optimizados y limpios para ejecutar Chromium en Linux y Docker sin estrangular V8
 const puppeteerArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -40,25 +65,8 @@ const puppeteerArgs = [
     '--disable-accelerated-2d-canvas',
     '--no-first-run',
     '--disable-gpu',
-    '--hide-scrollbars',
-    '--disable-extensions',
-    '--disable-plugins',
-    '--disable-component-extensions-with-background-pages',
-    '--disable-default-apps',
     '--mute-audio',
-    '--no-default-browser-check',
-    '--disable-blink-features=AutomationControlled',
-    '--disable-software-rasterizer',
-    '--disable-background-networking',
-    '--disable-background-timer-throttling',
-    '--disable-backgrounding-occluded-windows',
-    '--disable-breakpad',
-    '--disable-component-update',
-    '--disable-domain-reliability',
-    '--disable-sync',
-    '--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process,TranslateUI',
-    '--renderer-process-limit=1',
-    '--js-flags=--max-old-space-size=128'
+    '--no-default-browser-check'
 ];
 
 let client = null;
@@ -68,6 +76,10 @@ function createClientInstance() {
         authStrategy: new LocalAuth({
             dataPath: WWEBJS_DATA_PATH
         }),
+        webVersionCache: {
+            type: 'none'
+        },
+        authTimeoutMs: 120000, // 120 segundos para evitar timeouts prematuros de WebSocket
         takeoverOnConflict: true,
         takeoverTimeoutMs: 0,
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -233,11 +245,33 @@ client.on('message', async (message) => {
     }
 });
 
+let isInitializing = false;
+let retryTimer = null;
+
 const startWhatsAppClient = () => {
+    if (isInitializing) return;
+    isInitializing = true;
+    if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+    }
+
+    console.log('[WhatsApp] Purgando posibles bloqueos residuales de Chromium...');
+    cleanupChromeLocks(WWEBJS_DATA_PATH);
+
     console.log('[WhatsApp] Iniciando cliente de WhatsApp Web con Chromium...');
+    botStatus = 'initializing';
+
     client.initialize().catch(err => {
         console.error('[WhatsApp Error al inicializar]:', redactSensitiveData(err));
         botStatus = 'error';
+        isInitializing = false;
+        cleanupChromeLocks(WWEBJS_DATA_PATH);
+
+        console.log('[WhatsApp] Reintentando inicialización en 8 segundos...');
+        retryTimer = setTimeout(() => {
+            startWhatsAppClient();
+        }, 8000);
     });
 };
 

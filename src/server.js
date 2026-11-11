@@ -122,6 +122,28 @@ function renderDashboardHtml(status, qr) {
                 <p class="description">El cliente de WhatsApp perdió la conexión. Se está intentando reconectar automáticamente...</p>
             </div>
         `;
+    } else if (status === 'error') {
+        autoRefreshSec = 6;
+        statusBadge = `
+            <div class="badge badge-danger">
+                <span class="indicator pulse-red"></span>
+                <span>Reintentando Conexión</span>
+            </div>
+        `;
+        mainContent = `
+            <div class="status-card-inner">
+                <div class="icon-circle icon-danger">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                </div>
+                <h3>Sincronizando con WhatsApp Web...</h3>
+                <p class="description">El navegador demoró en responder o se recuperó de un bloqueo previo. El sistema está reintentando la conexión automáticamente.</p>
+                <p class="refresh-note">Esta página se actualizará sola cuando el código QR esté listo.</p>
+            </div>
+        `;
     } else {
         autoRefreshSec = 5;
         statusBadge = `
