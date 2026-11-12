@@ -217,14 +217,17 @@ export async function startWhatsAppClient() {
                     if (!scheduleStatus.isOpen) {
                         console.log(`⏰ [Fuera de Horario] Motivo: ${scheduleStatus.reason} | Hora actual: ${scheduleStatus.currentTime}`);
 
+                        // Si es el primer contacto fuera de horario, enviamos el aviso breve de horario
                         if (scheduleGuard.shouldSendOffHoursNotification(remoteJid)) {
                             const offHoursReply = scheduleGuard.getOffHoursMessage();
-                            console.log(`📤 Enviando mensaje automático de fuera de horario a ${pushName}...`);
+                            console.log(`📤 Enviando aviso breve de fuera de horario a ${pushName}...`);
                             await sock.sendMessage(remoteJid, { text: offHoursReply }, { quoted: msg });
-                        } else {
-                            console.log(`⏳ Usuario ${pushName} ya recibió la notificación de fuera de horario en este período.`);
+                            return;
                         }
-                        return;
+
+                        // Si el cliente ya recibió el aviso inicial y ahora envía sus datos, motivo o consulta:
+                        // La IA procesa y responde inmediatamente para no perder el hilo ni dejar al cliente en visto.
+                        console.log(`🟢 [Fuera de Horario - Continuación] ${pushName} continúa conversando. Procesando con IA...`);
                     }
 
                     // 2. CASO MULTIMEDIA SIN TEXTO EN HORARIO LABORAL

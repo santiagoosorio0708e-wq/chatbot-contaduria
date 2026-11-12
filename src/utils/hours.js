@@ -34,7 +34,7 @@ class ScheduleGuard {
                 saturday: { name: 'Sábado', isOpen: false, ranges: [] },
                 sunday: { name: 'Domingo', isOpen: false, ranges: [] }
             },
-            offHoursMessage: '📊 *Despacho de Contaduría Pública*\n\nHola, gracias por comunicarte. En este momento nos encontramos fuera de nuestro horario de atención habitual (Lunes a Viernes de 8:30 AM a 12:30 PM y de 2:00 PM a 6:00 PM).\n\nPor favor déjanos tu nombre y el detalle de tu consulta contable o tributaria, y te responderemos con gusto tan pronto iniciemos nuestra jornada laboral.'
+            offHoursMessage: '📊 *Despacho de Contaduría Pública*\n\n¡Hola! En este momento estamos fuera de horario (L-V: 8:30 am - 12:30 pm y 2:00 pm - 6:00 pm).\n\nDéjanos tu nombre y el motivo de tu consulta contable o tributaria para orientarte.'
         };
     }
 

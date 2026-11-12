@@ -63,3 +63,4 @@ console.log('📜 Mensaje configurado de fuera de horario:');
 console.log('----------------------------------------------------');
 console.log(scheduleGuard.getOffHoursMessage());
 console.log('----------------------------------------------------\n');
+

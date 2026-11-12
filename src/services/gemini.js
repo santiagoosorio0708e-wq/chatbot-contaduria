@@ -176,7 +176,7 @@ No des liquidaciones exactas por chat y si el cliente desea hablar con la contad
             console.warn(`⚠️ Error en llamada principal de Gemini (${this.modelName}):`, redactSensitiveData(error.message));
 
             // Modelos de respaldo en caso de saturación temporal o error 503/429
-            const fallbackModels = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+            const fallbackModels = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
 
             for (const fallbackModelName of fallbackModels) {
                 if (fallbackModelName === this.modelName) continue;

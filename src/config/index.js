@@ -16,7 +16,7 @@ if (!isConfigured) {
 
 export const GEMINI_API_KEY = rawApiKey;
 export const IS_CONFIGURED = isConfigured;
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 export const PORT = parseInt(process.env.PORT, 10) || 3000;
 export const NODE_ENV = sanitizeInput(process.env.NODE_ENV || 'production', 30);
 export const TIMEZONE = process.env.TIMEZONE || 'America/Bogota';
