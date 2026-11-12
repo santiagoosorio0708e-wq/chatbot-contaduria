@@ -66,6 +66,7 @@ const puppeteerArgs = [
     '--disable-dev-shm-usage',
     '--disable-accelerated-2d-canvas',
     '--no-first-run',
+    '--no-zygote',
     '--disable-gpu',
     '--mute-audio',
     '--no-default-browser-check',
