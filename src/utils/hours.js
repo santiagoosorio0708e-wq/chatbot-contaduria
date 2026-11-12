@@ -34,7 +34,7 @@ class ScheduleGuard {
                 saturday: { name: 'Sábado', isOpen: false, ranges: [] },
                 sunday: { name: 'Domingo', isOpen: false, ranges: [] }
             },
-            offHoursMessage: '📊 *Despacho de Contaduría Pública*\n\n¡Hola! En este momento nos encontramos fuera de nuestro horario de atención (Lunes a Viernes de 8:30 AM a 12:30 PM y de 2:00 PM a 6:00 PM).\n\nTan pronto iniciemos nuestra jornada laboral, con mucho gusto atenderemos y responderemos tu solicitud. ¡Gracias por escribirnos!'
+            offHoursMessage: '¡Hola! Soy Estrella, la asistente virtual de Olga Garcés. En este momento nos encontramos fuera de nuestro horario de atención (Lunes a Viernes de 8:30 AM a 12:30 PM y de 2:00 PM a 6:00 PM).\n\nTan pronto iniciemos nuestra jornada laboral, con mucho gusto atenderemos y responderemos tu solicitud. ¡Gracias por escribirnos!'
         };
     }
 
