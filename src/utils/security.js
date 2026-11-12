@@ -18,7 +18,7 @@ const API_KEY_REGEX = /AIza[0-9A-Za-z-_]{35}|AQ\.[0-9A-Za-z-_]{40,}|key=[0-9A-Za
  * @param {string|Error|any} data 
  * @returns {string} Texto seguro sin credenciales
  */
-function redactSensitiveData(data) {
+export function redactSensitiveData(data) {
     if (!data) return '';
     let str = typeof data === 'string' ? data : (data.stack || data.message || JSON.stringify(data));
     return str.replace(API_KEY_REGEX, '[REDACTED_API_KEY]');
@@ -32,7 +32,7 @@ function redactSensitiveData(data) {
  * @param {any} [fallback=null] - Valor de respaldo en caso de error de parseo
  * @returns {any} Objeto parseado seguro o fallback
  */
-function safeJsonParse(jsonString, fallback = null) {
+export function safeJsonParse(jsonString, fallback = null) {
     if (typeof jsonString !== 'string' || !jsonString.trim()) {
         return fallback;
     }
@@ -65,7 +65,7 @@ function safeJsonParse(jsonString, fallback = null) {
  * @param {number|string} [space=0] - Indentación
  * @returns {string} Cadena JSON segura
  */
-function safeJsonStringify(obj, space = 0) {
+export function safeJsonStringify(obj, space = 0) {
     const seen = new WeakSet();
     const sensitiveKeys = new Set(['key', 'apiKey', 'api_key', 'gemini_api_key', 'token', 'secret', 'password', 'authorization']);
 
@@ -110,7 +110,7 @@ function safeJsonStringify(obj, space = 0) {
  * @param {number} [maxLength=1000] - Longitud máxima permitida
  * @returns {string} Texto limpio y recortado
  */
-function sanitizeInput(input, maxLength = 1000) {
+export function sanitizeInput(input, maxLength = 1000) {
     if (typeof input !== 'string') return '';
 
     // Eliminar caracteres nulos (\0), bytes de control peligrosos excepto salto de línea y tabulador
@@ -132,7 +132,7 @@ function sanitizeInput(input, maxLength = 1000) {
  * @param {string} str - Cadena potencialmente insegura
  * @returns {string} Cadena con entidades HTML escapadas
  */
-function escapeHtml(str) {
+export function escapeHtml(str) {
     if (typeof str !== 'string') return '';
     return str
         .replace(/&/g, '&amp;')
@@ -149,7 +149,7 @@ function escapeHtml(str) {
  * @param {any} data - Datos a serializar en el script
  * @returns {string} JSON seguro para HTML
  */
-function serializeForScript(data) {
+export function serializeForScript(data) {
     const json = safeJsonStringify(data);
     return json
         .replace(/</g, '\\u003c')
@@ -167,7 +167,7 @@ function serializeForScript(data) {
  * @param {number} [options.maxRequests=60] - Máximo de peticiones permitidas por IP en la ventana
  * @returns {function(string): boolean} Función que recibe la IP y devuelve true si está permitida, false si excedió el límite
  */
-function createRateLimiter(options = {}) {
+export function createRateLimiter(options = {}) {
     const windowMs = options.windowMs || 60000;
     const maxRequests = options.maxRequests || 60;
     const ipHits = new Map();
@@ -204,13 +204,3 @@ function createRateLimiter(options = {}) {
         return true;
     };
 }
-
-module.exports = {
-    redactSensitiveData,
-    safeJsonParse,
-    safeJsonStringify,
-    sanitizeInput,
-    escapeHtml,
-    serializeForScript,
-    createRateLimiter
-};

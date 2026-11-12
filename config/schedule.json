@@ -1,0 +1,56 @@
+{
+  "timezone": "America/Bogota",
+  "weeklySchedule": {
+    "monday": {
+      "name": "Lunes",
+      "isOpen": true,
+      "ranges": [
+        { "start": "08:30", "end": "12:30" },
+        { "start": "14:00", "end": "18:00" }
+      ]
+    },
+    "tuesday": {
+      "name": "Martes",
+      "isOpen": true,
+      "ranges": [
+        { "start": "08:30", "end": "12:30" },
+        { "start": "14:00", "end": "18:00" }
+      ]
+    },
+    "wednesday": {
+      "name": "Miércoles",
+      "isOpen": true,
+      "ranges": [
+        { "start": "08:30", "end": "12:30" },
+        { "start": "14:00", "end": "18:00" }
+      ]
+    },
+    "thursday": {
+      "name": "Jueves",
+      "isOpen": true,
+      "ranges": [
+        { "start": "08:30", "end": "12:30" },
+        { "start": "14:00", "end": "18:00" }
+      ]
+    },
+    "friday": {
+      "name": "Viernes",
+      "isOpen": true,
+      "ranges": [
+        { "start": "08:30", "end": "12:30" },
+        { "start": "14:00", "end": "18:00" }
+      ]
+    },
+    "saturday": {
+      "name": "Sábado",
+      "isOpen": false,
+      "ranges": []
+    },
+    "sunday": {
+      "name": "Domingo",
+      "isOpen": false,
+      "ranges": []
+    }
+  },
+  "offHoursMessage": "📊 *Despacho de Contaduría Pública*\n\nHola, gracias por comunicarte. En este momento nos encontramos **fuera de nuestro horario de atención**.\n\n🕒 *Nuestros horarios de atención son:*\n• *Lunes a Viernes:*\n   - Mañana: 8:30 AM a 12:30 PM\n   - Tarde: 2:00 PM a 6:00 PM\n• *Sábados, Domingos y Festivos:* Cerrado\n\n📝 *Por favor déjanos en este chat:*\n1. Tu nombre completo o razón social de la empresa\n2. Un breve resumen de tu consulta o trámite contable (Declaración de Renta, Asesoría Tributaria, Revisoría Fiscal, Saldos a Favor o Exógena)\n\nTan pronto iniciemos nuestra jornada laboral, la contadora revisará tu mensaje para responderte a la mayor brevedad posible. ¡Agradecemos tu paciencia y confianza!"
+}

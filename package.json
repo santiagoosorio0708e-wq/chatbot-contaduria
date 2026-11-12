@@ -1,15 +1,20 @@
 {
   "name": "chatbot-contador",
   "version": "1.0.0",
-  "description": "Chatbot asistente virtual para despacho de Contaduría Pública con WhatsApp Web y Google Gemini",
+  "description": "Chatbot asistente virtual para despacho de Contaduría Pública con WhatsApp y Google Gemini (Ultra Bajo Consumo de RAM)",
   "main": "index.js",
+  "type": "module",
   "engines": {
     "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "node --expose-gc --max-old-space-size=96 --optimize-for-size index.js",
-    "dev": "nodemon index.js",
-    "test": "node test.js"
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test:security": "node test_security.js",
+    "test:server": "node test_server.js",
+    "test:schedule": "node test_schedule.js",
+    "test": "node test_security.js && node test_schedule.js && node test_server.js",
+    "clean": "node -e \"import('fs').then(fs => fs.rmSync('auth_info', {recursive:true, force:true})); console.log('Sesión limpiada.');\""
   },
   "repository": {
     "type": "git",
@@ -21,22 +26,20 @@
     "contaduria",
     "gemini",
     "render",
-    "puppeteer"
+    "baileys",
+    "low-memory"
   ],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/santiagoosorio0708e-wq/chatbot-contaduria/issues"
-  },
-  "homepage": "https://github.com/santiagoosorio0708e-wq/chatbot-contaduria#readme",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@whiskeysockets/baileys": "^6.7.24",
     "bottleneck": "^2.19.5",
     "dotenv": "^17.4.2",
-    "node-cron": "^4.6.0",
-    "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main"
+    "luxon": "^3.7.2",
+    "pino": "^9.14.0",
+    "pino-pretty": "^13.2.0",
+    "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

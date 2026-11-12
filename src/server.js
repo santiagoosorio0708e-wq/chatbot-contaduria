@@ -1,25 +1,18 @@
-const http = require('http');
-const { getBotStatus, getLatestQr } = require('./services/whatsapp');
-const { 
-    PORT, 
-    IS_CONFIGURED, 
-    BUSINESS_MORNING_START, 
-    BUSINESS_MORNING_END, 
-    BUSINESS_AFTERNOON_START, 
-    BUSINESS_AFTERNOON_END 
-} = require('./config');
-const { 
+import http from 'http';
+import { getBotStatus, getLatestQr, getLatestPairingCode } from './services/whatsapp.js';
+import { PORT, IS_CONFIGURED, USE_PAIRING_CODE } from './config/index.js';
+import { 
     safeJsonStringify, 
     escapeHtml, 
     serializeForScript, 
     createRateLimiter 
-} = require('./utils/security');
+} from './utils/security.js';
 
 // Limitadores de velocidad en memoria para prevenir DoS y fuerza bruta
 const apiRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 60 });
-const healthRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 180 }); // Amplio para sondas de Render
+const healthRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 180 });
 
-// Encabezados de seguridad reforzados (equivalente a Helmet pero nativo sin sobrecarga)
+// Encabezados de seguridad reforzados
 const SECURITY_HEADERS = {
     'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self';",
     'X-Content-Type-Options': 'nosniff',
@@ -34,16 +27,12 @@ const SECURITY_HEADERS = {
     'Expires': '0'
 };
 
-function renderDashboardHtml(status, qr) {
+function renderDashboardHtml(status, qr, pairingCode) {
     let statusBadge = '';
     let mainContent = '';
     let autoRefreshSec = 0;
 
     const safeStatus = escapeHtml(status || 'initializing');
-    const safeMorningStart = escapeHtml(BUSINESS_MORNING_START);
-    const safeMorningEnd = escapeHtml(BUSINESS_MORNING_END);
-    const safeAfternoonStart = escapeHtml(BUSINESS_AFTERNOON_START);
-    const safeAfternoonEnd = escapeHtml(BUSINESS_AFTERNOON_END);
 
     if (status === 'ready') {
         statusBadge = `
@@ -61,7 +50,7 @@ function renderDashboardHtml(status, qr) {
                     </svg>
                 </div>
                 <h3>WhatsApp Vinculado con Éxito</h3>
-                <p class="description">El asistente virtual de contaduría pública está activo, escuchando y respondiendo consultas en tiempo real.</p>
+                <p class="description">El asistente virtual de contaduría pública está activo con Baileys, escuchando y respondiendo consultas en tiempo real sin sobrecargar la memoria.</p>
                 <div class="metrics-grid">
                     <div class="metric-item">
                         <span class="metric-label">Motor de IA</span>
@@ -69,17 +58,40 @@ function renderDashboardHtml(status, qr) {
                     </div>
                     <div class="metric-item">
                         <span class="metric-label">Horario Mañana</span>
-                        <span class="metric-value">${safeMorningStart} - ${safeMorningEnd}</span>
+                        <span class="metric-value">08:30 - 12:30</span>
                     </div>
                     <div class="metric-item">
                         <span class="metric-label">Horario Tarde</span>
-                        <span class="metric-value">${safeAfternoonStart} - ${safeAfternoonEnd}</span>
+                        <span class="metric-value">14:00 - 18:00</span>
                     </div>
                 </div>
             </div>
         `;
+    } else if (pairingCode) {
+        statusBadge = `
+            <div class="badge badge-warning">
+                <span class="indicator pulse-amber"></span>
+                <span>Código de Vinculación Listo</span>
+            </div>
+        `;
+        const safeCode = escapeHtml(pairingCode);
+        mainContent = `
+            <div class="status-card-inner">
+                <div class="pairing-code-box">
+                    <span class="pairing-code-text">${safeCode}</span>
+                </div>
+                <h3>Vincula sin Escanear QR</h3>
+                <ol class="instructions-list">
+                    <li>Abre WhatsApp en el celular de la contadora.</li>
+                    <li>Toca <strong>Dispositivos vinculados</strong> en Configuración / Menú.</li>
+                    <li>Toca <strong>Vincular un dispositivo</strong>.</li>
+                    <li>Abajo toca <strong>"Vincular con el número de teléfono en su lugar"</strong>.</li>
+                    <li>Escribe el código mostrado arriba: <strong>${safeCode}</strong></li>
+                </ol>
+                <p class="refresh-note">⏳ Escribe este código en tu WhatsApp. El panel actualizará automáticamente al sincronizar.</p>
+            </div>
+        `;
     } else if (status === 'qr_ready' && qr) {
-        autoRefreshSec = 0;
         statusBadge = `
             <div class="badge badge-warning">
                 <span class="indicator pulse-amber"></span>
@@ -99,14 +111,6 @@ function renderDashboardHtml(status, qr) {
                     <li>Toca <strong>Vincular un dispositivo</strong> y apunta tu cámara a este código.</li>
                 </ol>
                 <p class="refresh-note">⏳ Apunta la cámara de tu celular. El panel actualizará automáticamente al sincronizar.</p>
-                <div style="margin-top: 14px; font-size: 0.78rem; color: #94a3b8; text-align: left; background: rgba(0,0,0,0.25); border-radius: 10px; padding: 10px 14px; width: 100%;">
-                    <strong style="color: #cbd5e1;">💡 ¿Tu WhatsApp dice que revises la conexión?</strong>
-                    <ul style="padding-left: 18px; margin-top: 4px; line-height: 1.5;">
-                        <li>Revisa en WhatsApp que no tengas el límite de 4 dispositivos vinculados.</li>
-                        <li>Desactiva VPN o prueba cambiando un momento entre Wi-Fi y datos móviles.</li>
-                        <li>Asegúrate de escanear el código QR apenas se actualice en pantalla.</li>
-                    </ul>
-                </div>
             </div>
         `;
     } else if (status === 'disconnected') {
@@ -130,55 +134,34 @@ function renderDashboardHtml(status, qr) {
                 <p class="description">El cliente de WhatsApp perdió la conexión. Se está intentando reconectar automáticamente...</p>
             </div>
         `;
-    } else if (status === 'error') {
-        autoRefreshSec = 6;
-        statusBadge = `
-            <div class="badge badge-danger">
-                <span class="indicator pulse-red"></span>
-                <span>Reintentando Conexión</span>
-            </div>
-        `;
-        mainContent = `
-            <div class="status-card-inner">
-                <div class="icon-circle icon-danger">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="8" x2="12" y2="12"></line>
-                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                    </svg>
-                </div>
-                <h3>Sincronizando con WhatsApp Web...</h3>
-                <p class="description">El navegador demoró en responder o se recuperó de un bloqueo previo. El sistema está reintentando la conexión automáticamente.</p>
-                <p class="refresh-note">Esta página se actualizará sola cuando el código QR esté listo.</p>
-            </div>
-        `;
     } else {
         autoRefreshSec = 5;
         statusBadge = `
             <div class="badge badge-info">
                 <span class="indicator pulse-blue"></span>
-                <span>Iniciando Navegador</span>
+                <span>Iniciando Baileys</span>
             </div>
         `;
         mainContent = `
             <div class="status-card-inner">
                 <div class="spinner"></div>
-                <h3>Inicializando WhatsApp Web...</h3>
-                <p class="description">Estamos arrancando la sesión de Puppeteer y Chromium en segundo plano. Esto puede tomar unos segundos.</p>
-                <p class="refresh-note">Actualizando automáticamente...</p>
+                <h3>Iniciando WhatsApp...</h3>
+                <p class="description">Conectando al protocolo WebSocket de WhatsApp sin navegador (Ultra bajo consumo de memoria).</p>
+                <p class="refresh-note">Generando código de acceso...</p>
             </div>
         `;
     }
 
     const scriptSafeStatus = serializeForScript(status || '');
     const scriptSafeQr = serializeForScript(qr || '');
+    const scriptSafePairing = serializeForScript(pairingCode || '');
 
     return `<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Control Seguro | Chatbot Contaduría Pública</title>
+    <title>Panel de Control | Chatbot Contaduría Pública</title>
     ${autoRefreshSec > 0 ? `<meta http-equiv="refresh" content="${autoRefreshSec}">` : ''}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -189,7 +172,6 @@ function renderDashboardHtml(status, qr) {
             --bg-card: rgba(18, 24, 38, 0.75);
             --border-card: rgba(255, 255, 255, 0.08);
             --accent: #3b82f6;
-            --accent-glow: rgba(59, 130, 246, 0.35);
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
@@ -225,7 +207,7 @@ function renderDashboardHtml(status, qr) {
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--border-card);
             border-radius: 24px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 80px rgba(59, 130, 246, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             overflow: hidden;
             animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -244,7 +226,6 @@ function renderDashboardHtml(status, qr) {
         .header h1 {
             font-size: 1.4rem;
             font-weight: 700;
-            letter-spacing: -0.02em;
             background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -259,42 +240,17 @@ function renderDashboardHtml(status, qr) {
             border-radius: 9999px;
             font-size: 0.85rem;
             font-weight: 500;
-            letter-spacing: 0.01em;
         }
 
-        .badge-success {
-            background: rgba(16, 185, 129, 0.15);
-            color: #34d399;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
+        .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-danger  { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-info    { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
 
-        .badge-warning {
-            background: rgba(245, 158, 11, 0.15);
-            color: #fbbf24;
-            border: 1px solid rgba(245, 158, 11, 0.3);
-        }
-
-        .badge-danger {
-            background: rgba(239, 68, 68, 0.15);
-            color: #f87171;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .badge-info {
-            background: rgba(59, 130, 246, 0.15);
-            color: #60a5fa;
-            border: 1px solid rgba(59, 130, 246, 0.3);
-        }
-
-        .indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-
+        .indicator { width: 8px; height: 8px; border-radius: 50%; }
         .pulse-green { background: #10b981; box-shadow: 0 0 10px #10b981; animation: pulse 2s infinite; }
         .pulse-amber { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; animation: pulse 1.5s infinite; }
-        .pulse-red   { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+        .pulse-red   { background: #ef4444; }
         .pulse-blue  { background: #3b82f6; box-shadow: 0 0 10px #3b82f6; animation: pulse 1.5s infinite; }
 
         @keyframes pulse {
@@ -303,152 +259,62 @@ function renderDashboardHtml(status, qr) {
             100% { transform: scale(0.95); opacity: 0.8; }
         }
 
-        .body {
-            padding: 30px 28px;
-        }
-
-        .status-card-inner {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-        }
+        .body { padding: 30px 28px; }
+        .status-card-inner { display: flex; flex-direction: column; align-items: center; text-align: center; }
 
         .icon-circle {
-            width: 72px;
-            height: 72px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 20px;
+            width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;
         }
-
-        .icon-success {
-            background: rgba(16, 185, 129, 0.15);
-            color: #10b981;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        .icon-danger {
-            background: rgba(239, 68, 68, 0.15);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
+        .icon-success { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .icon-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
 
         .spinner {
-            width: 54px;
-            height: 54px;
-            border: 4px solid rgba(59, 130, 246, 0.2);
-            border-top: 4px solid #3b82f6;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+            width: 54px; height: 54px; border: 4px solid rgba(59, 130, 246, 0.2); border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;
         }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         .qr-container {
-            background: #ffffff;
-            padding: 16px;
-            border-radius: 18px;
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
-            margin-bottom: 22px;
-            transition: transform 0.2s ease;
+            background: #ffffff; padding: 16px; border-radius: 18px; box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4); margin-bottom: 22px;
+        }
+        .qr-image { display: block; width: 240px; height: 240px; border-radius: 8px; }
+
+        .pairing-code-box {
+            background: rgba(59, 130, 246, 0.15);
+            border: 2px dashed #3b82f6;
+            border-radius: 16px;
+            padding: 18px 28px;
+            margin-bottom: 20px;
+        }
+        .pairing-code-text {
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            color: #60a5fa;
+            font-family: monospace;
         }
 
-        .qr-image {
-            display: block;
-            width: 240px;
-            height: 240px;
-            border-radius: 8px;
-        }
-
-        h3 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #ffffff;
-        }
-
-        .description {
-            font-size: 0.95rem;
-            color: var(--text-muted);
-            line-height: 1.5;
-            margin-bottom: 24px;
-            max-width: 400px;
-        }
+        h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 10px; color: #ffffff; }
+        .description { font-size: 0.95rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 24px; max-width: 400px; }
 
         .instructions-list {
-            text-align: left;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-card);
-            border-radius: 14px;
-            padding: 16px 20px 16px 36px;
-            font-size: 0.88rem;
-            color: #cbd5e1;
-            line-height: 1.7;
-            margin-bottom: 18px;
-            width: 100%;
+            text-align: left; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-card); border-radius: 14px; padding: 16px 20px 16px 36px; font-size: 0.88rem; color: #cbd5e1; line-height: 1.7; margin-bottom: 18px; width: 100%;
         }
-
-        .instructions-list strong {
-            color: #ffffff;
-        }
+        .instructions-list strong { color: #ffffff; }
 
         .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            width: 100%;
-            margin-top: 6px;
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; margin-top: 6px;
         }
-
         .metric-item {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-card);
-            border-radius: 14px;
-            padding: 14px 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
+            background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-card); border-radius: 14px; padding: 14px 10px; display: flex; flex-direction: column; gap: 4px;
         }
+        .metric-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+        .metric-value { font-size: 0.88rem; font-weight: 600; color: #ffffff; }
 
-        .metric-label {
-            font-size: 0.72rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-        }
-
-        .metric-value {
-            font-size: 0.88rem;
-            font-weight: 600;
-            color: #ffffff;
-        }
-
-        .refresh-note {
-            font-size: 0.8rem;
-            color: #64748b;
-        }
-
+        .refresh-note { font-size: 0.8rem; color: #64748b; }
         .footer {
-            padding: 18px 28px;
-            border-top: 1px solid var(--border-card);
-            text-align: center;
-            font-size: 0.8rem;
-            color: #64748b;
-            background: rgba(0, 0, 0, 0.15);
+            padding: 18px 28px; border-top: 1px solid var(--border-card); text-align: center; font-size: 0.8rem; color: #64748b; background: rgba(0, 0, 0, 0.15);
         }
-
-        .footer code {
-            background: rgba(255, 255, 255, 0.08);
-            padding: 2px 6px;
-            border-radius: 6px;
-            color: #cbd5e1;
-        }
+        .footer code { background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 6px; color: #cbd5e1; }
     </style>
 </head>
 <body>
@@ -461,12 +327,13 @@ function renderDashboardHtml(status, qr) {
             ${mainContent}
         </main>
         <footer class="footer">
-            Monitoreo activo y seguro en <code>/health</code>
+            Monitoreo activo y ultra ligero en <code>/health</code>
         </footer>
     </div>
     <script>
         const initialStatus = ${scriptSafeStatus};
         let currentQrString = ${scriptSafeQr};
+        let currentPairingString = ${scriptSafePairing};
 
         setInterval(async () => {
             try {
@@ -474,7 +341,7 @@ function renderDashboardHtml(status, qr) {
                 if (!res.ok) return;
                 const data = await res.json();
 
-                if (data.whatsappStatus !== initialStatus) {
+                if (data.whatsappStatus !== initialStatus || data.pairingCode !== currentPairingString) {
                     window.location.reload();
                     return;
                 }
@@ -495,20 +362,21 @@ function renderDashboardHtml(status, qr) {
 </html>`;
 }
 
-function startWebServer() {
+export function startWebServer(portOverride = null) {
+    const listenPort = portOverride || PORT;
     const server = http.createServer((req, res) => {
-        // 1. Validar longitud de URL para mitigar ataques de DoS / Buffer
+        // 1. Validar longitud de URL
         if (req.url && req.url.length > 2048) {
             res.writeHead(414, { 'Content-Type': 'text/plain; charset=utf-8' });
             return res.end('414 URI Too Long');
         }
 
-        // 2. Aplicar encabezados de seguridad a todas las respuestas
+        // 2. Encabezados de seguridad
         for (const [header, val] of Object.entries(SECURITY_HEADERS)) {
             res.setHeader(header, val);
         }
 
-        // 3. Restringir métodos HTTP: únicamente permitir GET y HEAD
+        // 3. Restringir métodos
         if (req.method !== 'GET' && req.method !== 'HEAD') {
             res.writeHead(405, { 
                 'Content-Type': 'application/json; charset=utf-8',
@@ -530,7 +398,7 @@ function startWebServer() {
             return res.end('400 Bad Request');
         }
 
-        // 4. Endpoint de Healthcheck para Render (Soporta /health, /healthz, /ping)
+        // 4. Endpoint de Healthcheck para Render
         if (pathname === '/health' || pathname === '/healthz' || pathname === '/ping' || pathname === '/healthcheck') {
             if (!healthRateLimiter(clientIp)) {
                 res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
@@ -540,11 +408,13 @@ function startWebServer() {
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             if (req.method === 'HEAD') return res.end();
 
+            const memMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
             const healthPayload = {
                 status: 'ok',
                 service: 'chatbot-contaduria',
                 uptimeSeconds: Math.floor(process.uptime()),
-                memoryUsageMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+                memoryUsageMB: memMb,
+                memoryStatus: memMb < 250 ? 'EXCELLENT (<250MB)' : 'NORMAL',
                 whatsappStatus: getBotStatus(),
                 isConfigured: IS_CONFIGURED,
                 timestamp: new Date().toISOString()
@@ -552,7 +422,7 @@ function startWebServer() {
             return res.end(safeJsonStringify(healthPayload));
         }
 
-        // 5. Aplicar Rate Limit general a rutas de consulta de estado y panel web
+        // 5. Rate limit general
         if (!apiRateLimiter(clientIp)) {
             res.writeHead(429, { 
                 'Content-Type': 'application/json; charset=utf-8',
@@ -561,7 +431,7 @@ function startWebServer() {
             return res.end(safeJsonStringify({ error: 'Límite de solicitudes excedido. Intenta más tarde.' }));
         }
 
-        // 6. Endpoint de estado en JSON estructurado y seguro
+        // 6. Endpoint de estado JSON
         if (pathname === '/status') {
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             if (req.method === 'HEAD') return res.end();
@@ -571,37 +441,35 @@ function startWebServer() {
                 whatsappStatus: getBotStatus(),
                 hasQr: Boolean(getLatestQr()),
                 qr: getLatestQr() || null,
+                pairingCode: getLatestPairingCode() || null,
                 isConfigured: IS_CONFIGURED,
                 timestamp: new Date().toISOString()
             };
             return res.end(safeJsonStringify(statusPayload));
         }
 
-        // 7. Panel Web seguro para escanear QR
+        // 7. Panel Web para escanear QR o ver Pairing Code
         if (pathname === '/qr' || pathname === '/') {
             const status = getBotStatus();
             const qr = getLatestQr();
+            const pairingCode = getLatestPairingCode();
 
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             if (req.method === 'HEAD') return res.end();
 
-            return res.end(renderDashboardHtml(status, qr));
+            return res.end(renderDashboardHtml(status, qr, pairingCode));
         }
 
-        // 8. Ruta no encontrada (404)
+        // 8. 404
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(safeJsonStringify({ error: 'Ruta no encontrada' }));
     });
 
-    server.listen(PORT, '0.0.0.0', () => {
-        console.log(`[Web Server] Servidor web listo en el puerto ${PORT}`);
-        console.log(`[Web Server] Healthcheck operativo en: /health`);
-        console.log(`[Web Server] Panel de vinculación QR en: /qr`);
+    server.listen(listenPort, '0.0.0.0', () => {
+        console.log(`[Web Server] Servidor web activo en el puerto ${listenPort}`);
+        console.log(`[Web Server] Healthcheck de Render en: /health`);
+        console.log(`[Web Server] Panel de vinculación en: /qr o /`);
     });
 
     return server;
 }
-
-module.exports = {
-    startWebServer
-};

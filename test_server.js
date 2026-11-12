@@ -1,13 +1,13 @@
-const assert = require('assert');
-const http = require('http');
+import assert from 'assert';
+import http from 'http';
 
 // Fijar puerto de prueba para no colisionar
 process.env.PORT = '4005';
-const { startWebServer } = require('./src/server');
+import { startWebServer } from './src/server.js';
 
 console.log("=== INICIANDO PRUEBAS DEL SERVIDOR HTTP Y RENDER ===");
 
-const server = startWebServer();
+const server = startWebServer(4005);
 
 function makeRequest(path, method = 'GET') {
     return new Promise((resolve, reject) => {
@@ -44,7 +44,8 @@ async function runServerTests() {
         assert.strictEqual(healthBody.status, 'ok');
         assert.strictEqual(healthBody.service, 'chatbot-contaduria');
         assert.ok(typeof healthBody.uptimeSeconds === 'number');
-        console.log("   ✓ Healthcheck respondió 200 con payload válido.");
+        assert.ok(typeof healthBody.memoryUsageMB === 'number');
+        console.log(`   ✓ Healthcheck respondió 200 (RAM en uso: ${healthBody.memoryUsageMB} MB).`);
 
         // 2. Probar Healthcheck HEAD /health
         console.log("2. Probando HEAD /health...");

@@ -1,5 +1,5 @@
-const assert = require('assert');
-const { 
+import assert from 'assert';
+import { 
     safeJsonParse, 
     safeJsonStringify, 
     sanitizeInput, 
@@ -7,7 +7,7 @@ const {
     serializeForScript, 
     redactSensitiveData,
     createRateLimiter 
-} = require('./src/utils/security');
+} from './src/utils/security.js';
 
 console.log("=== INICIANDO PRUEBAS DE SEGURIDAD Y OPTIMIZACIÓN ===");
 

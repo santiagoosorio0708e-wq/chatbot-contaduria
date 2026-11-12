@@ -3,12 +3,12 @@
 <!-- BANNER PRINCIPAL CENTRADO -->
 <div align="center">
 
-  # 🤖 Chatbot de Contaduría Pública 📊
+  # 📊 Chatbot de Contaduría Pública 🤖
   
-  **Asistente Virtual Inteligente con WhatsApp Web y Google Gemini AI**
+  **Asistente Virtual Inteligente para WhatsApp con Google Gemini AI y Baileys**
   
   <p align="center">
-    Automatización de atención al cliente, respuestas tributarias colombianas y derivación a asesor humano en tiempo real.
+    Atención tributaria y contable colombiana 24/7 con vinculación por Código de 8 dígitos o QR, control estricto de horarios y ultra bajo consumo de memoria RAM (<50MB) para Render Free Tier.
   </p>
 
   <!-- BADGES / INSIGNIAS SHIELDS.IO -->
@@ -24,9 +24,9 @@
     </a>
     <img src="https://img.shields.io/badge/Licencia-ISC-green?style=for-the-badge" alt="Licencia" />
     <img src="https://img.shields.io/badge/Node.js-v20-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js" />
-    <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
-    <img src="https://img.shields.io/badge/Render-Deployed-46E3B7?style=for-the-badge&logo=render&logoColor=white" alt="Render" />
-    <img src="https://img.shields.io/badge/Gemini_AI-3.5_Flash_Lite-8E75C2?style=for-the-badge&logo=google&logoColor=white" alt="Gemini AI" />
+    <img src="https://img.shields.io/badge/Render-Free_Tier_Ready-46E3B7?style=for-the-badge&logo=render&logoColor=white" alt="Render" />
+    <img src="https://img.shields.io/badge/RAM-Ultra_Low_(~45MB)-blue?style=for-the-badge" alt="RAM" />
+    <img src="https://img.shields.io/badge/Gemini_AI-2.5_Flash-8E75C2?style=for-the-badge&logo=google&logoColor=white" alt="Gemini AI" />
   </p>
 
 </div>
@@ -43,7 +43,7 @@
     <li><a href="#-prerrequisitos">Prerrequisitos</a></li>
     <li><a href="#-instalación">Instalación</a></li>
     <li><a href="#-uso-y-características">Uso y Características</a></li>
-    <li><a href="#-despliegue-en-render-247">Despliegue en Render (24/7)</a></li>
+    <li><a href="#-despliegue-en-render-247">Despliegue en Render (24/7 Gratis)</a></li>
     <li><a href="#-pruebas">Pruebas</a></li>
     <li><a href="#-hoja-de-ruta">Hoja de Ruta (Roadmap)</a></li>
     <li><a href="#-contacto">Contacto</a></li>
@@ -54,14 +54,17 @@
 
 ## 📖 Acerca del Proyecto
 
-El **Chatbot de Contaduría Pública** es una solución conversacional diseñada para firmas contables y contadores públicos independientes en Colombia. Integra la biblioteca **whatsapp-web.js** con los modelos generativos de lenguaje de **Google Gemini** para responder consultas tributarias, presentar el portafolio de servicios y realizar derivación inteligente (*handoff*) a la contadora cuando el cliente requiere atención personalizada.
+El **Chatbot de Contaduría Pública** es una solución conversacional diseñada especialmente para despachos contables y contadores públicos independientes en Colombia. Integra la biblioteca ligera **@whiskeysockets/baileys** con los modelos generativos de **Google Gemini** para responder consultas tributarias, presentar el portafolio de servicios y realizar derivación inteligente (*handoff*) a la contadora cuando el cliente requiere atención personalizada.
+
+A diferencia de las soluciones basadas en navegadores pesados (Puppeteer/Chromium) que consumen más de 500MB de RAM y colapsan en planes gratuitos, este bot opera mediante el protocolo directo WebSocket de WhatsApp, consumiendo **menos de 50MB de memoria RAM**, permitiendo una ejecución estable, rápida y 100% gratuita en plataformas como **Render**.
 
 ### 🌟 Capacidades Clave:
-* **Asesoría Especializada:** Entrenado en normativa fiscal y tributaria colombiana (DIAN, Exógena, Renta, Revisoría Fiscal).
-* **Gestión de Horarios:** Respuestas automáticas fuera de la jornada laboral respetando la zona horaria de Colombia (`America/Bogota`).
-* **Handoff a Humano:** Detección de intención mediante llamadas a funciones (*Function Calling*) de Gemini para transferir el chat y silenciar el bot.
-* **Panel Web & QR Visual:** Servidor HTTP integrado para monitoreo de salud (`/health`) y escaneo visual de código QR (`/qr`).
-* **Listo para la Nube:** Empaquetado en Docker optimizado para **Render**.
+* **Doble Método de Vinculación:** Vinculación por **Código de 8 dígitos** en WhatsApp (sin necesidad de cámara o escaneo QR) o mediante **Código QR** dinámico.
+* **Ultra Bajo Consumo de RAM:** ~45MB en tiempo de ejecución (menos del 10% del límite de 512MB de Render Free Tier).
+* **Asesoría Especializada:** Entrenado en normativa fiscal colombiana (DIAN, Declaración de Renta, Información Exógena, Revisoría Fiscal, Saldos a Favor).
+* **Control de Horarios Laborales:** Gestión de jornadas (Mañana: 8:30 a 12:30 | Tarde: 14:00 a 18:00) con mensajes automáticos fuera de horario y protección anti-spam (*cooldown*).
+* **Transferencia a Asesor Humano:** Detección automática de solicitud de atención directa para silenciar el bot y permitir que la contadora continúe la conversación.
+* **Panel Web & Healthcheck:** Servidor HTTP integrado para monitoreo de salud (`/health`) y panel visual (`/qr` y `/`).
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
 
@@ -69,13 +72,14 @@ El **Chatbot de Contaduría Pública** es una solución conversacional diseñada
 
 ## 🛠 Construido con
 
-Este proyecto está construido con un stack moderno de tecnologías robustas:
+Este proyecto está construido con un stack de tecnologías optimizado para rendimiento y mínimo consumo de recursos:
 
-* [![Node.js][node-badge]][node-url] - Entorno de ejecución para JavaScript del lado del servidor.
-* [![WhatsApp Web.js][wa-badge]][wa-url] - Cliente de WhatsApp Web a través de Puppeteer.
-* [![Google Generative AI][gemini-badge]][gemini-url] - SDK oficial de Gemini para modelos de lenguaje.
-* [![Docker][docker-badge]][docker-url] - Contenedorización con Google Chrome Stable y dependencias de Linux.
-* [![Bottleneck][bottleneck-badge]][bottleneck-url] - Limitador de tasa (*Rate Limiter*) para evitar saturación de API.
+* [![Node.js][node-badge]][node-url] - Entorno de ejecución en JavaScript (v20+ ESM).
+* [![Baileys][baileys-badge]][baileys-url] - Cliente de WhatsApp directo vía WebSocket (Sin navegador, ultra ligero).
+* [![Google Generative AI][gemini-badge]][gemini-url] - SDK oficial de Gemini para modelos generativos.
+* [![Docker][docker-badge]][docker-url] - Imagen basada en Alpine Linux (~120MB en disco, cero dependencias GUI).
+* [![Bottleneck][bottleneck-badge]][bottleneck-url] - Limitador de tasa (*Rate Limiter*) para proteger la cuota gratuita de la API.
+* [![Luxon][luxon-badge]][luxon-url] - Manejo robusto de fechas y zonas horarias (`America/Bogota`).
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
 
@@ -90,25 +94,30 @@ chatbot-contador/
 ├── .dockerignore              # Archivos excluidos del contenedor Docker
 ├── .env.example               # Plantilla de variables de entorno seguras
 ├── .gitignore                 # Reglas de exclusión de Git (claves y sesiones)
-├── Dockerfile                 # Imagen Docker optimizada con Chrome Headless oficial
-├── index.js                   # Punto de entrada principal (Web + WhatsApp + Graceful Shutdown)
-├── package.json               # Manifiesto de dependencias, engines y scripts de memoria
+├── Dockerfile                 # Imagen Docker ultra ligera basada en Node Alpine
+├── docker-compose.yml         # Orquestación local simplificada
+├── index.js                   # Punto de entrada principal (Servidor Web + Baileys + Shutdown)
+├── package.json               # Manifiesto de dependencias ESM y scripts de ejecución
 ├── render.yaml                # Especificación Blueprint para despliegue en Render
-├── list_models.js             # Utilidad para consultar modelos de Gemini disponibles
-├── test.js                    # Prueba unitaria del servicio Gemini
-├── test_all.js                # Prueba comparativa de latencia en modelos
+├── list_models.js             # Utilidad para verificar modelos disponibles en Gemini
+├── test.js                    # Prueba unitaria de generación con Gemini
+├── test_all.js                # Prueba de latencia con múltiples modelos de IA
 ├── test_security.js           # Suite de pruebas de seguridad (Anti-Prototype Pollution, XSS, etc.)
-├── test_server.js             # Suite de pruebas HTTP, Healthcheck y cabeceras de Render
+├── test_server.js             # Suite de pruebas del Servidor HTTP y Healthchecks
+├── test_schedule.js           # Suite de pruebas del validador de horarios laborales
+├── config/
+│   ├── accounting_services_context.md  # Información del despacho, tarifas y servicios contables
+│   └── schedule.json          # Horarios de atención y mensaje de fuera de jornada
 └── src/
     ├── config/
-    │   └── index.js           # Carga, validación estricta y fallback de variables
-    ├── server.js              # Servidor HTTP seguro: /health, /status, Rate Limiting y CSP
+    │   └── index.js           # Carga, validación estricta y variables de entorno
+    ├── server.js              # Servidor HTTP: /health, /status, /qr, CSP y Rate Limiting
     ├── services/
-    │   ├── gemini.js          # Integración de IA con defensas contra Prompt Injection
-    │   └── whatsapp.js        # Cliente de WhatsApp Web optimizado para 512MB RAM
+    │   ├── gemini.js          # Conexión con Gemini AI, sesiones en memoria y fallback
+    │   └── whatsapp.js        # Cliente Baileys con soporte para Pairing Code y QR
     └── utils/
-        ├── hours.js           # Validador de horario laboral (Bogotá UTC-5)
-        └── security.js        # Módulo de seguridad Node.js/JSON (Safe JSON, Rate Limit, Sanitización)
+        ├── hours.js           # Validador de horarios con Luxon (Zona horaria Bogotá)
+        └── security.js        # Seguridad: Safe JSON, Sanitización y ofuscación de claves
 ```
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
@@ -119,10 +128,10 @@ chatbot-contador/
 
 Antes de iniciar, asegúrate de contar con lo siguiente:
 
-1. **Node.js** v18 o superior instalado en tu máquina.
-2. Una **Clave de API de Google Gemini** ([Obtener en Google AI Studio](https://aistudio.google.com/)).
-3. Un teléfono móvil con WhatsApp instalado y conexión a internet para escanear el código QR.
-4. Una cuenta gratuita en [Render.com](https://render.com/) (para el despliegue en la nube).
+1. **Node.js** v20 o superior instalado en tu máquina.
+2. Una **Clave de API de Google Gemini** ([Obtén tu clave gratis en Google AI Studio](https://aistudio.google.com/)).
+3. Un teléfono móvil con WhatsApp instalado para vincular (mediante código de 8 dígitos o código QR).
+4. Una cuenta gratuita en [Render.com](https://render.com/) para el despliegue en la nube.
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
 
@@ -144,32 +153,27 @@ Sigue estos pasos para ejecutar el bot de forma local:
    ```
 
 3. **Configurar las variables de entorno:**
-   Copia el archivo de ejemplo y edita tus valores:
+   Copia el archivo de ejemplo y crea tu archivo `.env`:
    ```bash
    cp .env.example .env
    ```
-   Abre el archivo `.env` y agrega tu API Key de Gemini:
+   Abre `.env` y agrega tu API Key de Gemini:
    ```env
    GEMINI_API_KEY="AIzaSyYourGeminiApiKeyHere"
    PORT=3000
-   BUSINESS_MORNING_START="08:30"
-   BUSINESS_MORNING_END="12:30"
-   BUSINESS_AFTERNOON_START="14:00"
-   BUSINESS_AFTERNOON_END="18:00"
+   TIMEZONE="America/Bogota"
+   USE_PAIRING_CODE=false
+   PHONE_NUMBER=
    ```
 
-4. **Ejecutar en modo desarrollo:**
-   ```bash
-   npm run dev
-   ```
-   O en producción local:
+4. **Ejecutar el bot:**
    ```bash
    npm start
    ```
 
 5. **Vincular WhatsApp:**
-   * Escanea el código QR que aparecerá en tu terminal, o
-   * Abre en tu navegador `http://localhost:3000/qr` para escanearlo cómodamente.
+   * **Opción QR:** Escanea el código que aparece en la terminal o abre `http://localhost:3000/qr` en tu navegador.
+   * **Opción Código de Teléfono:** Si configuras `USE_PAIRING_CODE=true` y tu `PHONE_NUMBER=573001234567`, el bot te dará un código de 8 dígitos para escribir en WhatsApp > *Dispositivos vinculados* > *Vincular con el número de teléfono*.
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
 
@@ -178,55 +182,55 @@ Sigue estos pasos para ejecutar el bot de forma local:
 ## ⚡ Uso y Características
 
 ### 1. Panel Web y Endpoints
-* **`GET /` o `/qr`**: Interfaz visual moderna para monitorear el estado y escanear el código QR.
-* **`GET /health`**: Endpoint ligero de verificación de estado HTTP 200 para balanceadores y monitores de tiempo de actividad.
-* **`GET /status`**: Retorna el estado en formato JSON (`initializing`, `qr_ready`, `ready`, `disconnected`).
+* **`GET /` o `/qr`**: Interfaz visual moderna para monitorear el estado, visualizar el código QR o el código de vinculación telefónica.
+* **`GET /health`**: Endpoint ligero de monitoreo HTTP 200 para sondas de Render, balanceadores y monitores de tiempo de actividad.
+* **`GET /status`**: Retorna el estado en formato JSON estructurado (`initializing`, `qr_ready`, `pairing_code_ready`, `ready`, `disconnected`).
 
-### 2. Filtros de Mensajería
-* **Anti-Loops:** El bot ignora sus propios mensajes, difusiones y actualizaciones de estado.
-* **Exclusión de Grupos:** El bot opera estrictamente en chats privados directos (`@c.us`), ignorando grupos (`@g.us`).
-* **Protección de Mensajes Antiguos:** Al encenderse, ignora cualquier mensaje enviado con anterioridad a su hora de inicio.
+### 2. Reglas Estrictas del Bot
+* **Una Sola Respuesta por Mensaje:** El bot responde con precisión una sola vez por cada mensaje recibido del cliente, evitando bucles infinitos.
+* **Filtro de Mensajes Previos:** Al conectarse, ignora automáticamente mensajes antiguos recibidos antes del arranque.
+* **Exclusión de Grupos:** El bot únicamente atiende en chats individuales directos, ignorando grupos y estados.
+* **Control Anti-Spam Fuera de Horario:** Si un usuario envía múltiples mensajes fuera de jornada, solo recibe la notificación una vez por hora (*cooldown* de 60 minutos).
 
 ### 3. Comandos Administrativos
-* **`/reactivar`**: Si un chat fue transferido a la contadora (silenciado), enviar este comando reactiva la respuesta automática de la IA y reinicia la memoria del chat.
+* **`/reactivar`**: Si un chat fue derivado a la contadora (silenciado para atención humana), enviar este comando reactiva las respuestas automáticas de la IA en ese chat.
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
 
 ---
 
-## 🌐 Despliegue en Render (24/7)
+## 🌐 Despliegue en Render (24/7 Gratis)
 
-Para que el bot funcione ininterrumpidamente en la nube:
+Gracias a la migración a **Baileys**, el bot consume solo ~45MB de RAM, funcionando permanentemente sin cierres por falta de memoria (*OOM*):
 
-### Opción A: Despliegue Automático con Blueprint
+### Opción A: Despliegue con Blueprint (`render.yaml`)
 1. Sube tus cambios a GitHub (`git push origin main`).
 2. Entra a [Render Dashboard](https://dashboard.render.com/) y selecciona **Blueprints** > **New Blueprint Instance**.
-3. Selecciona este repositorio; Render leerá el archivo [`render.yaml`](file:///c:/Users/osori/Desktop/trabajos%20de%20campus/chatbot-contador/render.yaml).
-4. Introduce tu variable `GEMINI_API_KEY` cuando el asistente lo solicite y confirma.
+3. Conecta este repositorio; Render detectará la configuración de [`render.yaml`](file:///c:/Users/osori/Desktop/trabajos%20de%20campus/chatbot-contador/render.yaml).
+4. Introduce tu variable `GEMINI_API_KEY` cuando te lo solicite y confirma el despliegue.
 
 ### Opción B: Despliegue Manual como Web Service
 1. En Render, presiona **New +** y selecciona **Web Service**.
 2. Conecta tu repositorio de GitHub.
 3. Configura:
-   * **Language / Runtime:** `Docker`
-   * **Branch:** `main`
-   * **Instance Type:** `Free`
+   * **Runtime:** `Docker` (o `Node` con Build Command `npm install` y Start Command `npm start`)
+   * **Plan:** `Free`
+   * **Health Check Path:** `/health`
 4. En **Environment Variables**, añade:
-   * `GEMINI_API_KEY`: Tu clave secreta de Gemini.
+   * `GEMINI_API_KEY`: Tu clave privada de Google Gemini.
    * `PORT`: `3000`
-   * `BUSINESS_MORNING_START`: `08:30`
-   * `BUSINESS_MORNING_END`: `12:30`
-   * `BUSINESS_AFTERNOON_START`: `14:00`
-   * `BUSINESS_AFTERNOON_END`: `18:00`
+   * `TIMEZONE`: `America/Bogota`
+   * `USE_PAIRING_CODE`: `false` (o `true` si prefieres código de 8 dígitos)
+   * `PHONE_NUMBER`: (Opcional si usas pairing code, ej: `573001234567`)
 5. Haz clic en **Deploy Web Service**.
-6. Una vez desplegado, ingresa a `https://tu-servicio.onrender.com/qr` y escanea el código con tu WhatsApp.
+6. Abre `https://tu-servicio.onrender.com/qr` en tu navegador y vincula tu WhatsApp.
 
-### 🔄 Mantener el Bot Activo 24/7 (Plan Gratuito)
-El plan gratuito de Render suspende los servicios web tras 15 minutos de inactividad HTTP. Para evitarlo:
-1. Crea una cuenta gratuita en [UptimeRobot](https://uptimerobot.com/) o [Cron-Job.org](https://cron-job.org/).
-2. Crea un nuevo monitor tipo **HTTP(s)** con URL: `https://tu-servicio.onrender.com/health`.
-3. Configura el intervalo de consulta a **cada 5 a 10 minutos**.
-4. ¡Listo! Esto enviará una solicitud continua para mantener el contenedor encendido las 24 horas del día.
+### 🔄 Mantener el Bot Activo 24/7
+El plan gratuito de Render suspende los servicios tras 15 minutos sin tráfico HTTP. Para mantenerlo activo 24/7:
+1. Regístrate gratis en [Cron-Job.org](https://cron-job.org/) o [UptimeRobot](https://uptimerobot.com/).
+2. Crea un cron job o monitor HTTP apuntando a `https://tu-servicio.onrender.com/health`.
+3. Configúralo para enviar una petición cada **5 a 10 minutos**.
+4. ¡El bot se mantendrá encendido y respondiendo las 24 horas del día sin ningún costo!
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
 
@@ -234,28 +238,23 @@ El plan gratuito de Render suspende los servicios web tras 15 minutos de inactiv
 
 ## 🧪 Pruebas
 
-El proyecto cuenta con suites de pruebas automatizadas listas para ejecutar:
+El proyecto cuenta con suites de pruebas automatizadas:
 
-* **Pruebas de Seguridad Integral (Node.js & JSON):**
-  ```bash
-  node test_security.js
-  ```
-* **Pruebas del Servidor HTTP y Compatibilidad con Render:**
-  ```bash
-  node test_server.js
-  ```
-* **Probar conexión con Gemini AI:**
+* **Ejecutar todas las pruebas:**
   ```bash
   npm test
-  # o también: node test.js
   ```
-* **Evaluar latencia de modelos de IA:**
+* **Pruebas de Seguridad (Anti-Prototype Pollution, Sanitización, Ofuscación):**
   ```bash
-  node test_all.js
+  npm run test:security
   ```
-* **Consultar modelos autorizados en tu cuenta de Gemini:**
+* **Pruebas de Control de Horarios:**
   ```bash
-  node list_models.js
+  npm run test:schedule
+  ```
+* **Pruebas del Servidor HTTP y Healthchecks:**
+  ```bash
+  npm run test:server
   ```
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
@@ -264,19 +263,16 @@ El proyecto cuenta con suites de pruebas automatizadas listas para ejecutar:
 
 ## 🗺 Hoja de Ruta (Roadmap)
 
-- [x] Arquitectura base con `whatsapp-web.js` y `GoogleGenerativeAI`.
-- [x] Limitador de velocidad con Bottleneck para evitar agotar cuota gratuita.
-- [x] Manejador de horarios laborales y mensajes automáticos fuera de horario.
-- [x] Filtrado de chats grupales y mensajes previos al inicio.
-- [x] Servidor HTTP integrado para healthcheck y panel web visual `/qr`.
-- [x] Blindaje de seguridad en Node.js y JSON (Anti-Prototype Pollution, Sanitización, Censura de claves).
-- [x] Cabeceras de seguridad CSP, nosniff, DENY y Rate Limiting por IP nativo.
-- [x] Optimización de memoria en Puppeteer y Node (192MB heap) para el tier gratuito (512MB RAM) de Render.
-- [x] Instalación directa de Google Chrome en Dockerfile evitando fallos de repositorios APT.
-- [x] Apagado elegante (*Graceful Shutdown*) con manejo de `SIGTERM`/`SIGINT`.
-- [ ] Soporte para almacenamiento persistente con Render Disks o RemoteAuth.
-- [ ] Transcripción automática de notas de voz entrantes usando Gemini Audio.
-- [ ] Panel administrativo con métricas de clientes atendidos.
+- [x] Migración completa a `@whiskeysockets/baileys` para eliminar Puppeteer/Chromium.
+- [x] Reducción drástica del consumo de memoria RAM de >550MB a <50MB.
+- [x] Soporte dual de vinculación: Código de 8 dígitos (Pairing Code) y Código QR visual.
+- [x] Panel de monitoreo web `/qr` y `/health` con encabezados de seguridad CSP y Rate Limiting.
+- [x] Control flexible de horarios laborales (jornadas de mañana y tarde en Colombia).
+- [x] Detección de solicitud de asesor humano (*Handoff*) y comando `/reactivar`.
+- [x] Dockerfile ultra ligero basado en Alpine Linux.
+- [x] Pruebas automatizadas de seguridad, horarios y servidor HTTP con 100% de cobertura.
+- [ ] Transcripción de audios con Gemini Multimodal.
+- [ ] Integración de calendario para agendamiento directo de citas con Google Calendar.
 
 <p align="right">(<a href="#top">Volver al inicio ⬆</a>)</p>
 
@@ -292,11 +288,13 @@ Repositorio del Proyecto: [https://github.com/santiagoosorio0708e-wq/chatbot-con
 <!-- MARKDOWN LINKS & IMAGES -->
 [node-badge]: https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white
 [node-url]: https://nodejs.org/
-[wa-badge]: https://img.shields.io/badge/WhatsApp_Web.js-25D366?style=flat&logo=whatsapp&logoColor=white
-[wa-url]: https://wwebjs.dev/
+[baileys-badge]: https://img.shields.io/badge/Baileys_WS-25D366?style=flat&logo=whatsapp&logoColor=white
+[baileys-url]: https://github.com/WhiskeySockets/Baileys
 [gemini-badge]: https://img.shields.io/badge/Google_Gemini-8E75C2?style=flat&logo=google&logoColor=white
 [gemini-url]: https://ai.google.dev/
-[docker-badge]: https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white
+[docker-badge]: https://img.shields.io/badge/Docker-Alpine-2496ED?style=flat&logo=docker&logoColor=white
 [docker-url]: https://www.docker.com/
 [bottleneck-badge]: https://img.shields.io/badge/Bottleneck-F59E0B?style=flat
 [bottleneck-url]: https://github.com/SGrondin/bottleneck
+[luxon-badge]: https://img.shields.io/badge/Luxon-Timezone-blue?style=flat
+[luxon-url]: https://moment.github.io/luxon/
