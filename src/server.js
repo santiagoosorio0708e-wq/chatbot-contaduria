@@ -1,5 +1,5 @@
 import http from 'http';
-import { getBotStatus, getLatestQr, getLatestPairingCode } from './services/whatsapp.js';
+import { getBotStatus, getLatestQr, getLatestPairingCode, resetWhatsAppSession } from './services/whatsapp.js';
 import { PORT, IS_CONFIGURED, USE_PAIRING_CODE } from './config/index.js';
 import { 
     safeJsonStringify, 
@@ -132,6 +132,11 @@ function renderDashboardHtml(status, qr, pairingCode) {
                 </div>
                 <h3>Cliente Desconectado</h3>
                 <p class="description">El cliente de WhatsApp perdió la conexión. Se está intentando reconectar automáticamente...</p>
+                <div style="margin-top: 1.25rem;">
+                    <a href="/reset" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 0.9rem; transition: background 0.2s;">
+                        🔄 Generar Nuevo Código QR
+                    </a>
+                </div>
             </div>
         `;
     } else {
@@ -460,7 +465,14 @@ export function startWebServer(portOverride = null) {
             return res.end(renderDashboardHtml(status, qr, pairingCode));
         }
 
-        // 8. 404
+        // 8. Reinicio manual de sesión y regeneración forzada de QR
+        if (pathname === '/reset') {
+            resetWhatsAppSession().catch(err => console.error('Error en /reset:', err));
+            res.writeHead(302, { 'Location': '/qr' });
+            return res.end();
+        }
+
+        // 9. 404
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(safeJsonStringify({ error: 'Ruta no encontrada' }));
     });

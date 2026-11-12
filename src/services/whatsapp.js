@@ -1,3 +1,4 @@
+import fs from 'fs';
 import makeWASocket, {
     useMultiFileAuthState,
     DisconnectReason,
@@ -105,7 +106,7 @@ export async function startWhatsAppClient() {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
             },
-            browser: Browsers.ubuntu('Chrome'),
+            browser: Browsers.macOS('Desktop'),
             printQRInTerminal: false,
             generateHighQualityLinkPreview: false,
             syncFullHistory: false,
@@ -116,20 +117,8 @@ export async function startWhatsAppClient() {
 
         activeSocket = sock;
 
-        // Asegurar que authState.creds.me siempre tenga un lid definido para prevenir el error de .split(':') en Baileys
-        const ensureLidSafe = () => {
-            if (state.creds?.me) {
-                if (!state.creds.me.lid) {
-                    state.creds.me.lid = state.creds.me.id || '';
-                }
-            }
-        };
-        ensureLidSafe();
-
-        sock.ev.on('creds.update', (update) => {
-            ensureLidSafe();
-            saveCreds();
-        });
+        // Guardar credenciales de forma nativa sin alterar identidades
+        sock.ev.on('creds.update', saveCreds);
 
         // 1. Manejo de Pairing Code si está habilitado y no está registrado
         if (USE_PAIRING_CODE && !sock.authState.creds.registered) {
@@ -182,21 +171,34 @@ export async function startWhatsAppClient() {
             // Manejo de desconexión y reconexión limpia
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
-                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                const isLoggedOut = statusCode === DisconnectReason.loggedOut;
 
-                console.log(`⚠️ Conexión de WhatsApp cerrada. Código de estado: ${statusCode}. Reconectando: ${shouldReconnect}`);
+                console.log(`⚠️ Conexión de WhatsApp cerrada. Código de estado: ${statusCode}. Reconectando: ${!isLoggedOut}`);
                 botStatus = 'disconnected';
                 latestQr = null;
+                latestPairingCode = null;
 
-                if (shouldReconnect) {
+                if (isLoggedOut) {
+                    console.log('🗑️ Sesión cerrada o invalidada (Logout 401). Limpiando credenciales para generar nuevo QR...');
+                    try {
+                        fs.rmSync(AUTH_FOLDER_PATH, { recursive: true, force: true });
+                        console.log('✅ Carpeta de autenticación eliminada exitosamente.');
+                    } catch (err) {
+                        console.warn('⚠️ No se pudo eliminar la carpeta de autenticación:', err.message);
+                    }
+
+                    // Reinicio automático inmediato para que el usuario pueda escanear un nuevo QR fresco
+                    setTimeout(() => {
+                        console.log('🔄 Reiniciando Baileys para generar nuevo código QR limpio...');
+                        startWhatsAppClient();
+                    }, 3000);
+                } else {
+                    // Reconexión para caídas de red o códigos como 515 (restartRequired)
                     setTimeout(() => {
                         startWhatsAppClient();
-                    }, 4000);
-                } else {
-                    console.log('❌ Sesión cerrada permanentemente (Logout). Se limpiarán credenciales en el siguiente reinicio.');
+                    }, 3500);
                 }
             } else if (connection === 'open') {
-                ensureLidSafe();
                 console.log('\n=============================================================');
                 console.log('✅ ¡CONEXIÓN EXITOSA CON WHATSAPP!');
                 console.log('📌 Bot de Contaduría Pública activo y listo para atender mensajes.');
@@ -424,4 +426,28 @@ export function getLatestQr() {
 
 export function getLatestPairingCode() {
     return latestPairingCode;
+}
+
+// Permite reiniciar manualmente la sesión y forzar un nuevo código QR limpio
+export async function resetWhatsAppSession() {
+    console.log('🔄 [Reset Manual] Limpiando credenciales y reiniciando sesión...');
+    try {
+        if (activeSocket) {
+            activeSocket.end(undefined);
+            activeSocket = null;
+        }
+    } catch (e) {}
+
+    try {
+        fs.rmSync(AUTH_FOLDER_PATH, { recursive: true, force: true });
+        console.log('✅ Carpeta de credenciales limpiada correctamente.');
+    } catch (e) {}
+
+    botStatus = 'initializing';
+    latestQr = null;
+    latestPairingCode = null;
+
+    setTimeout(() => {
+        startWhatsAppClient();
+    }, 2000);
 }
