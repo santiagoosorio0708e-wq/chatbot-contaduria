@@ -2,7 +2,7 @@ import fs from 'fs';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import Bottleneck from 'bottleneck';
 import { GEMINI_API_KEY, IS_CONFIGURED, GEMINI_MODEL, CONTEXT_FILE_PATH } from '../config/index.js';
-import { sanitizeInput, redactSensitiveData } from '../utils/security.js';
+import { sanitizeInput, redactSensitiveData, resolveWhatsAppContact } from '../utils/security.js';
 
 // Límite de la API gratuita de Gemini: 15 peticiones por minuto.
 // Limitamos a 14 peticiones por minuto (una cada ~4.3s) para garantizar cero bloqueos por cuota.
@@ -39,8 +39,11 @@ class GeminiService {
 
         return `Eres Estrella, la asistente virtual oficial de la contadora Olga Garcés en Colombia.
 Tu objetivo es atender a los clientes con empatía, profesionalismo, detectando sarcasmo con madurez ejecutiva sin tomarlo literal, y limitándote ÚNICA Y EXCLUSIVAMENTE a las leyes fiscales y normativas de Colombia (DIAN, Estatuto Tributario).
-REGLA DE CONCISIÓN: Mantén tus respuestas SIEMPRE CORTAS (máximo 2 a 4 líneas). Sé directa y clara, sin rodeos ni textos largos.
-REGLA DE MENSAJE ININTELIGIBLE: Si el mensaje contiene una sola letra, texto incomprensible o sin sentido, responde estrictamente: "No he entendido tu mensaje, ¿puedes repetirlo?".
+REGLA DE BREVEDAD ABSOLUTA: Mantén tus respuestas SIEMPRE CORTAS (máximo 2 a 3 líneas de texto / 1 a 2 oraciones). Sé directa, ágil y concisa. En WhatsApp la gente no lee textos largos.
+PROHIBICIÓN TOTAL DE VOCABULARIO: ESTÁ TOTALMENTE PROHIBIDO usar las palabras "velación" o "velar" (suenan a funeraria). Para Revisoría Fiscal y Auditoría usa exclusivamente: "auditoría", "control interno" o "dictamen".
+UN MENSAJE POR TURNO: Envía únicamente un solo mensaje puntual por turno.
+REGLA DE MENSAJE ININTELIGIBLE: Si el mensaje contiene una sola letra, texto incomprensible o sin sentido, responde estrictamente: "No he entendido tu mensaje. ¿Deseas que te comunique directamente con la contadora Olga Garcés?".
+CERO ACOSO: Si el cliente no solicita contacto o deja de responder, no le envíes mensajes adicionales no solicitados.
 No brindes asesoría sobre leyes de otros países y si el cliente solicita hablar con Olga Garcés, haz la transferencia.`;
     }
 
@@ -93,7 +96,7 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
                 tools: this.getTools(),
                 generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 300
+                    maxOutputTokens: 200
                 }
             });
 
@@ -127,7 +130,7 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
         const message = sanitizeInput(rawMessage, 1000);
         if (!message) {
             return {
-                text: "¿En qué te puedo colaborar con respecto a tus temas contables o tributarios?",
+                text: "¿En qué trámite contable o tributario te puedo colaborar?",
                 handoff: false
             };
         }
@@ -139,11 +142,24 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
             sessionData.history.push({ role: 'user', content: message, timestamp: Date.now() });
         }
 
-        // Verificación heurística directa de solicitud de humano para agilidad
-        const humanKeywords = ['hablar con la contadora', 'comunicar con la contadora', 'hablar con un asesor', 'hablar con persona', 'asesor humano', 'hablar con alguien', 'con olga'];
-        const lowerMsg = message.toLowerCase();
-        if (humanKeywords.some(kw => lowerMsg.includes(kw))) {
-            const handoffReply = "Entendido, te voy a comunicar con la contadora. En unos momentos ella revisará tu mensaje y te responderá directamente por este medio. ¡Muchas gracias!";
+        // Verificación heurística de solicitud o confirmación de comunicación con la contadora
+        const lowerMsg = message.toLowerCase().trim();
+        const humanKeywords = [
+            'hablar con la contadora', 'comunicar con la contadora', 'comunicarme con la contadora',
+            'hablar con un asesor', 'hablar con persona', 'asesor humano', 'hablar con alguien',
+            'con olga', 'comunícame con la contadora', 'comunicame con la contadora',
+            'comunícame con olga', 'quiero hablar con olga', 'quiero hablar con la contadora'
+        ];
+
+        // Verificar si el usuario confirma tras habérsele preguntado si desea comunicarse con Olga
+        const affirmativeResponses = ['si', 'sí', 'por favor', 'si por favor', 'sí por favor', 'claro', 'si claro', 'sí claro', 'comunícame', 'comunicame', 'quiero hablar con ella'];
+        const isAffirmative = affirmativeResponses.includes(lowerMsg);
+        const lastAssistantMsg = sessionData?.history?.slice().reverse().find(m => m.role === 'assistant')?.content || '';
+        const askedForTransfer = lastAssistantMsg.toLowerCase().includes('comunique directamente con la contadora') ||
+                                 lastAssistantMsg.toLowerCase().includes('se comunique contigo');
+
+        if ((isAffirmative && askedForTransfer) || humanKeywords.some(kw => lowerMsg.includes(kw))) {
+            const handoffReply = "Entendido, le notificaré de inmediato a la contadora Olga Garcés para que se comunique contigo por este medio. ¡Muchas gracias!";
             if (sessionData && sessionData.history) {
                 sessionData.history.push({ role: 'assistant', content: handoffReply, timestamp: Date.now() });
             }
@@ -169,7 +185,7 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
                 if (functionCalls && Array.isArray(functionCalls) && functionCalls.length > 0) {
                     const call = functionCalls.find(fc => fc && fc.name === "transfer_to_human");
                     if (call) {
-                        const transferReply = "Entendido, te voy a comunicar con la contadora. En unos momentos ella revisará tu caso y te responderá por este mismo medio.";
+                        const transferReply = "Entendido, le notificaré a la contadora Olga Garcés para que revise tu caso y te responda por este mismo medio.";
                         if (sessionData && sessionData.history) {
                             sessionData.history.push({ role: 'assistant', content: transferReply, timestamp: Date.now() });
                         }
@@ -181,7 +197,13 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
                 }
 
                 const responseText = result.response.text();
-                const cleanResponse = responseText ? responseText.trim() : "¿Podrías darme más detalles sobre tu consulta contable?";
+                let cleanResponse = responseText ? responseText.trim() : "¿Podrías darme más detalles sobre tu consulta contable?";
+
+                // Sanitización estricta: Erradicación total de "velación" / "velar" en el mensaje
+                cleanResponse = cleanResponse.replace(/\bvelaci[oó]n\b/gi, 'auditoría');
+                cleanResponse = cleanResponse.replace(/\bvelaciones\b/gi, 'auditorías');
+                cleanResponse = cleanResponse.replace(/\bvelar\b/gi, 'supervisar el cumplimiento');
+
                 if (sessionData && sessionData.history) {
                     sessionData.history.push({ role: 'assistant', content: cleanResponse, timestamp: Date.now() });
                     if (sessionData.history.length > 25) {
@@ -196,7 +218,7 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
             }
 
             return {
-                text: "Lo siento, hubo un problema procesando tu consulta. ¿Deseas que te comunique directamente con la contadora?",
+                text: "No he entendido tu mensaje. ¿Deseas que te comunique directamente con la contadora Olga Garcés?",
                 handoff: false
             };
 
@@ -212,10 +234,15 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
                     console.log(`🔄 Probando modelo de respaldo: ${fallbackModelName}...`);
                     const fallbackModel = this.genAI.getGenerativeModel({
                         model: fallbackModelName,
-                        systemInstruction: this.systemInstruction
+                        systemInstruction: this.systemInstruction,
+                        generationConfig: { maxOutputTokens: 200 }
                     });
                     const result = await fallbackModel.generateContent(message);
-                    const cleanFallbackText = result.response.text().trim();
+                    let cleanFallbackText = result.response.text().trim();
+                    cleanFallbackText = cleanFallbackText.replace(/\bvelaci[oó]n\b/gi, 'auditoría');
+                    cleanFallbackText = cleanFallbackText.replace(/\bvelaciones\b/gi, 'auditorías');
+                    cleanFallbackText = cleanFallbackText.replace(/\bvelar\b/gi, 'supervisar el cumplimiento');
+
                     if (sessionData && sessionData.history) {
                         sessionData.history.push({ role: 'assistant', content: cleanFallbackText, timestamp: Date.now() });
                     }
@@ -229,7 +256,7 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
             }
 
             return {
-                text: "Hola, gracias por comunicarte con nuestro despacho de Contaduría Pública. En este momento tuvimos una pequeña intermitencia técnica. Por favor déjanos tu consulta y en breve te atenderemos.",
+                text: "Hola, en este momento tuvimos una pequeña intermitencia técnica. ¿Deseas que te comunique directamente con la contadora Olga Garcés?",
                 handoff: false
             };
         }
@@ -240,7 +267,7 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
         return session?.history ? session.history.length : 0;
     }
 
-    async generateLeadSummary(senderId, pushName, statusReason) {
+    async generateLeadSummary(senderId, pushName, statusReason, lidMap = null) {
         if (!IS_CONFIGURED || !this.genAI) return null;
 
         const session = this.userSessions.get(senderId);
@@ -252,13 +279,9 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
             .map(m => `${m.role === 'user' ? 'Cliente' : 'Estrella'}: ${m.content}`)
             .join('\n');
 
-        // Formatear el enlace de WhatsApp si el senderId contiene un número de teléfono
-        let phoneDisplay = senderId;
-        const phoneMatch = senderId.match(/^(\d+)/);
-        if (phoneMatch) {
-            const rawPhone = phoneMatch[1];
-            phoneDisplay = `+${rawPhone} (https://wa.me/${rawPhone})`;
-        }
+        // Resolución segura y verídica del contacto de WhatsApp (evita wa.me/233... rotos para @lid)
+        const resolvedContact = resolveWhatsAppContact(senderId, pushName, session.history, lidMap);
+        const phoneDisplay = resolvedContact.display;
 
         const prompt = `Actúa como la secretaria ejecutiva Estrella para la contadora pública Olga Garcés en Colombia.
 Analiza la siguiente conversación sostenida con un cliente en WhatsApp:
@@ -273,20 +296,21 @@ HISTORIAL DE LA CONVERSACIÓN:
 ${formattedHistory}
 
 INSTRUCCIONES CLAVE:
-1. Determina si el cliente ha aportado información contable/tributaria real o un caso concreto (por ejemplo: su nombre, cédula o NIT, ciudad, tipo de contribuyente, trámite que necesita resolver como renta, exógena, balances, saldos a favor, documentos que tiene o consulta tributaria concreta).
+1. Determina si el cliente ha aportado información contable/tributaria real o un caso concreto (por ejemplo: su nombre, cédula o NIT, ciudad, tipo de contribuyente, trámite que necesita resolver como renta, exógena, saldos a favor, auditoría/revisoría fiscal, documentos que tiene o consulta tributaria concreta).
 2. Si el cliente ÚNICAMENTE saludó (ej: "hola", "buen día"), envió mensajes vacíos o pruebas, o la conversación no contiene datos contables ni caso que atender, responde ÚNICA Y EXCLUSIVAMENTE con la palabra: NO_LEAD
-3. Si el cliente SÍ aportó información útil o planteó una situación contable, genera un reporte ejecutivo impecable y estructurado para Olga Garcés (que se enviará a su chat personal "Tú") con el siguiente formato exacto:
+3. NUNCA USES LA PALABRA "VELACIÓN" NI "VELAR" (suena a funeraria). Para Revisoría Fiscal usa "auditoría", "dictamen" o "control interno".
+4. Si el cliente SÍ aportó información útil o planteó una situación contable, genera un reporte ejecutivo impecable y estructurado para Olga Garcés (que se enviará a su chat personal "Tú") con el siguiente formato exacto:
 
 📋 *NUEVO PROSPECTO / RESUMEN DE CLIENTE*
 
 👤 *Cliente:* [Nombre detectado en la conversación o nombre de WhatsApp]
-📱 *WhatsApp:* ${phoneDisplay}
+📱 *WhatsApp:* ${phoneDisplay}${resolvedContact.note ? `\n💡 *Nota:* ${resolvedContact.note}` : ''}
 🆔 *Cédula / NIT:* [Número de identificación si lo dio, o "No especificado"]
 🏙️ *Ciudad:* [Ciudad si la dio, o "No especificada"]
 🏢 *Contribuyente:* [Persona Natural / Empresa SAS / etc., o "No especificado"]
-📊 *Trámite requerido:* [Declaración de Renta / Exógena / Saldos a favor / Revisoría / Asesoría / etc.]
+📊 *Trámite requerido:* [Declaración de Renta / Exógena / Saldos a favor / Auditoría o Revisoría Fiscal / Asesoría / etc.]
 📌 *Estado de interacción:* ${statusReason}
-📝 *Resumen del Caso:* [Resumen conciso y muy claro de 2 a 4 líneas de lo que necesita resolver]
+📝 *Resumen del Caso:* [Resumen conciso y muy claro de 2 a 3 líneas de lo que necesita resolver]
 📂 *Documentos / Soportes:* [Documentos mencionados o "Pendientes por solicitar"]
 
 Recuerda: Si no hay información contable relevante, responde solo NO_LEAD sin ningún texto adicional.`;
@@ -298,10 +322,14 @@ Recuerda: Si no hay información contable relevante, responde solo NO_LEAD sin n
                     try {
                         const m = this.genAI.getGenerativeModel({ model: candidate });
                         const res = await m.generateContent(prompt);
-                        const text = res?.response?.text()?.trim();
+                        let text = res?.response?.text()?.trim();
                         if (!text || text.includes('NO_LEAD')) {
                             return null;
                         }
+                        // Erradicación de "velación" / "velar" en el reporte
+                        text = text.replace(/\bvelaci[oó]n\b/gi, 'auditoría');
+                        text = text.replace(/\bvelaciones\b/gi, 'auditorías');
+                        text = text.replace(/\bvelar\b/gi, 'supervisar el cumplimiento');
                         return text;
                     } catch (e) {
                         console.warn(`[Lead Summary Fallback] Falló con ${candidate}:`, redactSensitiveData(e.message));

@@ -268,3 +268,89 @@ export function isUnintelligibleOrSingleChar(text) {
 
     return false;
 }
+
+/**
+ * Resuelve de forma precisa y fidedigna la información de contacto de WhatsApp para un cliente.
+ * Previene la generación de enlaces rotos 'wa.me/' con LIDs internos de 15 dígitos (@lid).
+ * 
+ * @param {string} senderId - JID de WhatsApp (ej: '573101234567@s.whatsapp.net' o '233908297838713@lid')
+ * @param {string} [pushName='Cliente'] - Nombre público visible de WhatsApp
+ * @param {Array<{role: string, content: string}>} [history=[]] - Historial de mensajes para extraer teléfonos provistos en el chat
+ * @param {Map<string, string>} [knownLidMap=null] - Mapa opcional de LID a número de teléfono
+ * @returns {{ phone: string|null, display: string, isDirectLink: boolean, note?: string }}
+ */
+export function resolveWhatsAppContact(senderId, pushName = 'Cliente', history = [], knownLidMap = null) {
+    if (!senderId || typeof senderId !== 'string') {
+        return {
+            phone: null,
+            display: pushName || 'Cliente',
+            isDirectLink: false
+        };
+    }
+
+    const cleanSender = senderId.trim();
+
+    // 1. Si es un JID estándar de WhatsApp con número telefónico (@s.whatsapp.net o @c.us)
+    if (cleanSender.endsWith('@s.whatsapp.net') || cleanSender.endsWith('@c.us')) {
+        const rawPhone = cleanSender.split('@')[0].replace(/\D/g, '');
+        if (rawPhone.length >= 8 && rawPhone.length <= 15) {
+            return {
+                phone: rawPhone,
+                display: `+${rawPhone} (https://wa.me/${rawPhone})`,
+                isDirectLink: true
+            };
+        }
+    }
+
+    // 2. Si es un LID (@lid) y tenemos mapeado su número real de teléfono
+    if (knownLidMap && knownLidMap.has(cleanSender)) {
+        const mappedRaw = knownLidMap.get(cleanSender).replace(/\D/g, '');
+        if (mappedRaw.length >= 8 && mappedRaw.length <= 15) {
+            return {
+                phone: mappedRaw,
+                display: `+${mappedRaw} (https://wa.me/${mappedRaw})`,
+                isDirectLink: true
+            };
+        }
+    }
+
+    // 3. Si en el historial de la conversación el cliente escribió su número de teléfono celular (ej: Colombia: 3XX...)
+    const fullConversationText = (Array.isArray(history) ? history : [])
+        .map(h => (typeof h === 'string' ? h : h.content || ''))
+        .join(' ');
+
+    const colombianCellMatch = fullConversationText.match(/(?:(?:\+|00)?57\s*)?(3\d{2}[\s.-]?\d{3}[\s.-]?\d{4})\b/);
+    if (colombianCellMatch) {
+        const cleanCol = colombianCellMatch[1].replace(/\D/g, '');
+        if (cleanCol.length === 10) {
+            return {
+                phone: `57${cleanCol}`,
+                display: `+57 ${cleanCol} (https://wa.me/57${cleanCol}) [Número suministrado en chat]`,
+                isDirectLink: true
+            };
+        }
+    }
+
+    // Cualquier otro número internacional de 10 a 13 dígitos escrito en el chat
+    const genericPhoneMatch = fullConversationText.match(/\b(?:\+|00)?([1-9]\d{9,12})\b/);
+    if (genericPhoneMatch) {
+        const cleanGen = genericPhoneMatch[1].replace(/\D/g, '');
+        if (cleanGen.length < 14) {
+            return {
+                phone: cleanGen,
+                display: `+${cleanGen} (https://wa.me/${cleanGen}) [Número suministrado en chat]`,
+                isDirectLink: true
+            };
+        }
+    }
+
+    // 4. Si el usuario está bajo privacidad (@lid) y no se tiene número de teléfono
+    // NUNCA generar un enlace roto tipo https://wa.me/233...
+    return {
+        phone: null,
+        display: `Chat directo en WhatsApp (${pushName || 'Cliente'}) [Número oculto por privacidad]`,
+        isDirectLink: false,
+        note: `El cliente tiene su número oculto por privacidad en WhatsApp. Para escribirle, abre la conversación existente con "${pushName || 'Cliente'}".`
+    };
+}
+

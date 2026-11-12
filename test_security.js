@@ -8,7 +8,8 @@ import {
     redactSensitiveData,
     createRateLimiter,
     isPureEmoji,
-    isUnintelligibleOrSingleChar
+    isUnintelligibleOrSingleChar,
+    resolveWhatsAppContact
 } from './src/utils/security.js';
 
 console.log("=== INICIANDO PRUEBAS DE SEGURIDAD Y OPTIMIZACIÓN ===");
@@ -117,6 +118,38 @@ assert.strictEqual(isUnintelligibleOrSingleChar("renta"), false, "'renta' es pal
 assert.strictEqual(isUnintelligibleOrSingleChar("10203040"), false, "Cédula o número largo es válido");
 assert.strictEqual(isUnintelligibleOrSingleChar("necesito asesoría tributaria"), false, "Frase válida");
 console.log("   ✓ Detección de mensajes ininteligibles y letra única verificada.");
+
+// 11. Prueba de Resolución de Contacto de WhatsApp (Evitar wa.me/ con LIDs rotos)
+console.log("11. Probando resolución segura de contactos de WhatsApp (resolveWhatsAppContact)...");
+// Caso A: JID telefónico directo
+const directContact = resolveWhatsAppContact("573109876543@s.whatsapp.net", "María");
+assert.strictEqual(directContact.isDirectLink, true);
+assert.strictEqual(directContact.phone, "573109876543");
+assert.ok(directContact.display.includes("https://wa.me/573109876543"));
+
+// Caso B: LID con teléfono en el chat
+const chatPhoneContact = resolveWhatsAppContact("233908297838713@lid", "Carlos", [
+    { role: "user", content: "Hola mi celular es 312 456 7890 para que me llamen" }
+]);
+assert.strictEqual(chatPhoneContact.isDirectLink, true);
+assert.strictEqual(chatPhoneContact.phone, "573124567890");
+assert.ok(chatPhoneContact.display.includes("https://wa.me/573124567890"));
+
+// Caso C: LID con teléfono en mapa dinámico
+const lidMap = new Map([["233908297838713@lid", "573001234567"]]);
+const mappedContact = resolveWhatsAppContact("233908297838713@lid", "Pedro", [], lidMap);
+assert.strictEqual(mappedContact.isDirectLink, true);
+assert.strictEqual(mappedContact.phone, "573001234567");
+assert.ok(mappedContact.display.includes("https://wa.me/573001234567"));
+
+// Caso D: LID anónimo sin teléfono conocido (modo privado)
+const anonymousLid = resolveWhatsAppContact("233908297838713@lid", "Cliente Anónimo", []);
+assert.strictEqual(anonymousLid.isDirectLink, false);
+assert.strictEqual(anonymousLid.phone, null);
+assert.ok(!anonymousLid.display.includes("https://wa.me/233908297838713"), "NUNCA debe generar un enlace roto con LID de 15 dígitos");
+assert.ok(anonymousLid.display.includes("Número oculto por privacidad"));
+assert.ok(anonymousLid.note.includes("Cliente Anónimo"));
+console.log("   ✓ Resolución segura y verídica de números WhatsApp verificada.");
 
 console.log("\n=======================================================");
 console.log("✔ TODAS LAS PRUEBAS DE SEGURIDAD PASARON SATISFACTORIAMENTE");

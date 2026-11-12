@@ -64,6 +64,26 @@ async function runTests() {
     console.log(leadSummary);
     console.log("-------------------------------------------------------");
 
+    // 6. Prueba de Lead con LID (233...@lid) y erradicación total de palabra 'velación'
+    console.log("6. Probando generación de lead para usuario con LID y exclusión de 'velación'...");
+    const lidUser = "233908297838713@lid";
+    geminiService.resetSession(lidUser);
+    geminiService.getChatSession(lidUser);
+    const sessionLid = geminiService.userSessions.get(lidUser);
+    sessionLid.history = [
+        { role: 'user', content: 'Buenas tardes, represento al Conjunto Residencial Torres del Parque en Medellín (NIT 900123456). Requerimos servicio de revisoría fiscal y auditoría contable para la copropiedad.', timestamp: Date.now() },
+        { role: 'assistant', content: 'Hola. En el despacho de Olga Garcés realizamos auditoría y dictamen de estados financieros para propiedad horizontal bajo la Ley 675. ¿Deseas coordinar con la contadora?', timestamp: Date.now() },
+        { role: 'user', content: 'Sí por favor comunícame con ella, mi teléfono de contacto es 311 234 5678.', timestamp: Date.now() }
+    ];
+
+    const lidSummary = await geminiService.generateLeadSummary(lidUser, "Administración Torres", "Cliente solicitó comunicarse con la contadora");
+    assert.ok(lidSummary, "Debe generar resumen para el caso de auditoría en PH");
+    assert.ok(!lidSummary.includes("https://wa.me/233908297838713"), "NUNCA debe generar enlace wa.me con el LID de 15 dígitos");
+    assert.ok(lidSummary.includes("573112345678"), "Debe resolver el teléfono suministrado en el chat");
+    assert.ok(!/velaci[oó]n|velar/i.test(lidSummary), "NUNCA debe contener la palabra 'velación' ni 'velar'");
+    console.log("   ✓ Lead con LID y número telefónico validado sin enlaces rotos.");
+    console.log("   ✓ Prohibición absoluta de 'velación' verificada en el reporte.");
+
     console.log("\n=======================================================");
     console.log("✔ TODAS LAS PRUEBAS DE RESUMEN DE PROSPECTOS PASARON CON ÉXITO");
     console.log("=======================================================\n");

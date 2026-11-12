@@ -34,6 +34,9 @@ const startupTime = Math.floor(Date.now() / 1000);
 const processedMessageIds = new Set();
 const mutedChats = new Set();
 
+// Mapeo dinámico de WhatsApp LID (@lid) a número telefónico real (@s.whatsapp.net)
+const lidToPhoneMap = new Map();
+
 // Control de inactividad de clientes y resúmenes ejecutivos enviados al chat propio ("Tú")
 const inactivityTimers = new Map(); // remoteJid -> NodeJS.Timeout
 const sentSummaries = new Map();    // remoteJid -> { msgCount: number, timestamp: number }
@@ -67,7 +70,7 @@ async function sendLeadSummaryToSelf(sock, remoteJid, pushName, statusReason) {
         }
 
         console.log(`🔍 [Resumen Lead] Analizando interacción de ${pushName} (${remoteJid}) para notificar a la contadora...`);
-        const summaryText = await geminiService.generateLeadSummary(remoteJid, pushName, statusReason);
+        const summaryText = await geminiService.generateLeadSummary(remoteJid, pushName, statusReason, lidToPhoneMap);
 
         if (!summaryText) {
             console.log(`ℹ️ [Resumen Lead] ${pushName} no aportó datos contables relevantes. Omitiendo envío a chat propio.`);
@@ -121,6 +124,34 @@ export async function startWhatsAppClient() {
 
         // Guardar credenciales de forma nativa sin alterar identidades
         sock.ev.on('creds.update', saveCreds);
+
+        // Mapeo proactivo de LIDs a números de teléfono reales
+        sock.ev.on('chats.phoneNumberShare', ({ lid, jid }) => {
+            if (lid && jid) {
+                const cleanPn = jid.split('@')[0].replace(/\D/g, '');
+                if (cleanPn.length >= 8) {
+                    lidToPhoneMap.set(lid, cleanPn);
+                    pruneMap(lidToPhoneMap, 300);
+                }
+            }
+        });
+
+        sock.ev.on('contacts.upsert', (contacts) => {
+            if (Array.isArray(contacts)) {
+                for (const c of contacts) {
+                    if (c && c.lid && (c.jid || c.id)) {
+                        const target = c.jid || c.id;
+                        if (typeof target === 'string' && target.endsWith('@s.whatsapp.net')) {
+                            const cleanPn = target.split('@')[0].replace(/\D/g, '');
+                            if (cleanPn.length >= 8) {
+                                lidToPhoneMap.set(c.lid, cleanPn);
+                            }
+                        }
+                    }
+                }
+                pruneMap(lidToPhoneMap, 300);
+            }
+        });
 
         // 1. Manejo de Pairing Code si está habilitado y no está registrado
         if (USE_PAIRING_CODE && !sock.authState.creds.registered) {
@@ -249,6 +280,18 @@ export async function startWhatsAppClient() {
                     // REGLA 2: Ignorar grupos (@g.us) y estados (status@broadcast)
                     if (remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') continue;
 
+                    // Mapeo proactivo de LID si el mensaje entrante contiene senderPn o participantPn
+                    if (remoteJid.endsWith('@lid')) {
+                        const pnCandidate = msg.key?.senderPn || msg.key?.participantPn;
+                        if (pnCandidate && typeof pnCandidate === 'string') {
+                            const cleanPn = pnCandidate.replace(/\D/g, '');
+                            if (cleanPn.length >= 8) {
+                                lidToPhoneMap.set(remoteJid, cleanPn);
+                                pruneMap(lidToPhoneMap, 300);
+                            }
+                        }
+                    }
+
                     // Si el cliente volvió a escribir, reiniciar el temporizador de inactividad
                     if (inactivityTimers.has(remoteJid)) {
                         clearTimeout(inactivityTimers.get(remoteJid));
@@ -336,10 +379,21 @@ export async function startWhatsAppClient() {
                     console.log(`\n📩 Mensaje recibido de ${pushName} (${remoteJid}): "${text}"`);
 
                     // REGLA 2.4: Si envía una sola letra o una palabra ininteligible:
-                    // "lo unico que debe decir es no he entendido tu mensaje , puedes repetirlo"
                     if (isUnintelligibleOrSingleChar(text)) {
                         console.log(`❓ [Ininteligible] Mensaje de ${pushName} ("${text}") es ininteligible o de una sola letra.`);
-                        await safeSend(remoteJid, { text: "No he entendido tu mensaje, ¿puedes repetirlo?" });
+                        const unintelligibleReply = "No he entendido tu mensaje. ¿Deseas que te comunique directamente con la contadora Olga Garcés?";
+                        await safeSend(remoteJid, { text: unintelligibleReply });
+
+                        // Registrar en el historial de sesión para reconocer si el usuario responde afirmativamente
+                        try {
+                            geminiService.getChatSession(remoteJid);
+                            const sessionData = geminiService.userSessions.get(remoteJid);
+                            if (sessionData && sessionData.history) {
+                                sessionData.history.push({ role: 'user', content: text, timestamp: Date.now() });
+                                sessionData.history.push({ role: 'assistant', content: unintelligibleReply, timestamp: Date.now() });
+                            }
+                        } catch (e) {}
+
                         continue;
                     }
 
