@@ -1,4 +1,5 @@
 import http from 'http';
+import QRCode from 'qrcode';
 import { getBotStatus, getLatestQr, getLatestPairingCode, resetWhatsAppSession } from './services/whatsapp.js';
 import { PORT, IS_CONFIGURED, USE_PAIRING_CODE } from './config/index.js';
 import { 
@@ -98,7 +99,7 @@ function renderDashboardHtml(status, qr, pairingCode) {
                 <span>Esperando Escaneo de QR</span>
             </div>
         `;
-        const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qr)}&size=300x300&margin=10`;
+        const qrImgUrl = `/qr.png?t=${Date.now()}`;
         mainContent = `
             <div class="status-card-inner">
                 <div class="qr-container">
@@ -355,7 +356,7 @@ function renderDashboardHtml(status, qr, pairingCode) {
                     currentQrString = data.qr;
                     const img = document.getElementById('qr-image-display');
                     if (img) {
-                        img.src = 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(data.qr) + '&size=300x300&margin=10';
+                        img.src = '/qr.png?t=' + Date.now();
                     } else {
                         window.location.reload();
                     }
@@ -369,7 +370,7 @@ function renderDashboardHtml(status, qr, pairingCode) {
 
 export function startWebServer(portOverride = null) {
     const listenPort = portOverride || PORT;
-    const server = http.createServer((req, res) => {
+    const server = http.createServer(async (req, res) => {
         // 1. Validar longitud de URL
         if (req.url && req.url.length > 2048) {
             res.writeHead(414, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -453,7 +454,27 @@ export function startWebServer(portOverride = null) {
             return res.end(safeJsonStringify(statusPayload));
         }
 
-        // 7. Panel Web para escanear QR o ver Pairing Code
+        // 7. Endpoint de Imagen PNG del Código QR (Generado localmente sin APIs externas)
+        if (pathname === '/qr.png') {
+            const qr = getLatestQr();
+            if (!qr) {
+                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                return res.end('QR no disponible aún. El bot se está iniciando...');
+            }
+            try {
+                const pngBuffer = await QRCode.toBuffer(qr, { width: 340, margin: 2 });
+                res.writeHead(200, { 
+                    'Content-Type': 'image/png',
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+                });
+                return res.end(pngBuffer);
+            } catch (qrErr) {
+                res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+                return res.end('Error al renderizar el código QR');
+            }
+        }
+
+        // 8. Panel Web para escanear QR o ver Pairing Code
         if (pathname === '/qr' || pathname === '/') {
             const status = getBotStatus();
             const qr = getLatestQr();
@@ -465,14 +486,14 @@ export function startWebServer(portOverride = null) {
             return res.end(renderDashboardHtml(status, qr, pairingCode));
         }
 
-        // 8. Reinicio manual de sesión y regeneración forzada de QR
+        // 9. Reinicio manual de sesión y regeneración forzada de QR
         if (pathname === '/reset') {
             resetWhatsAppSession().catch(err => console.error('Error en /reset:', err));
             res.writeHead(302, { 'Location': '/qr' });
             return res.end();
         }
 
-        // 9. 404
+        // 10. 404
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(safeJsonStringify({ error: 'Ruta no encontrada' }));
     });

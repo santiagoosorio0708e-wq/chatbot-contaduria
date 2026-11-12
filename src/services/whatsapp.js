@@ -23,6 +23,7 @@ let botStatus = 'initializing';
 let latestQr = null;
 let latestPairingCode = null;
 let activeSocket = null;
+let isShuttingDown = false;
 
 // Tiempo de arranque del bot (en segundos UNIX)
 // REGLA CLAVE: El bot solo puede escribir después de que se realiza la conexión;
@@ -89,6 +90,7 @@ async function sendLeadSummaryToSelf(sock, remoteJid, pushName, statusReason) {
 
 export async function startWhatsAppClient() {
     console.log('🤖 Iniciando Cliente de WhatsApp con Baileys (Ultra Bajo Consumo de RAM)...');
+    isShuttingDown = false;
     botStatus = 'initializing';
     latestQr = null;
     latestPairingCode = null;
@@ -106,7 +108,7 @@ export async function startWhatsAppClient() {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
             },
-            browser: Browsers.macOS('Desktop'),
+            browser: Browsers.macOS('Chrome'),
             printQRInTerminal: false,
             generateHighQualityLinkPreview: false,
             syncFullHistory: false,
@@ -170,6 +172,12 @@ export async function startWhatsAppClient() {
 
             // Manejo de desconexión y reconexión limpia
             if (connection === 'close') {
+                if (isShuttingDown) {
+                    console.log('[WhatsApp] Cierre por apagado seguro del proceso. No se programa reconexión.');
+                    botStatus = 'disconnected';
+                    return;
+                }
+
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 const isLoggedOut = statusCode === DisconnectReason.loggedOut;
 
@@ -177,6 +185,14 @@ export async function startWhatsAppClient() {
                 botStatus = 'disconnected';
                 latestQr = null;
                 latestPairingCode = null;
+
+                if (statusCode === 515) {
+                    console.log('🔄 [WhatsApp 515] Reinicio requerido tras sincronización inicial de QR. Reconectando en 1.5s...');
+                    setTimeout(() => {
+                        startWhatsAppClient();
+                    }, 1500);
+                    return;
+                }
 
                 if (isLoggedOut) {
                     console.log('🗑️ Sesión cerrada o invalidada (Logout 401). Limpiando credenciales para generar nuevo QR...');
@@ -191,13 +207,14 @@ export async function startWhatsAppClient() {
                     setTimeout(() => {
                         console.log('🔄 Reiniciando Baileys para generar nuevo código QR limpio...');
                         startWhatsAppClient();
-                    }, 3000);
-                } else {
-                    // Reconexión para caídas de red o códigos como 515 (restartRequired)
-                    setTimeout(() => {
-                        startWhatsAppClient();
-                    }, 3500);
+                    }, 2000);
+                    return;
                 }
+
+                // Reconexión para otras caídas temporales de red
+                setTimeout(() => {
+                    startWhatsAppClient();
+                }, 3000);
             } else if (connection === 'open') {
                 console.log('\n=============================================================');
                 console.log('✅ ¡CONEXIÓN EXITOSA CON WHATSAPP!');
@@ -403,7 +420,8 @@ export async function startWhatsAppClient() {
 }
 
 export async function stopWhatsAppClient() {
-    console.log('[WhatsApp] Cerrando conexión de WhatsApp...');
+    console.log('[WhatsApp] Cerrando conexión de WhatsApp de forma segura...');
+    isShuttingDown = true;
     for (const timer of inactivityTimers.values()) {
         clearTimeout(timer);
     }
