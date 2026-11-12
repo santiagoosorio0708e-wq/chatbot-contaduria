@@ -29,3 +29,4 @@ try {
 } catch (err) {
     console.warn('⚠️ [fix-baileys] No se pudo aplicar el parche:', err.message);
 }
+
