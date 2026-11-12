@@ -168,40 +168,68 @@ export async function startWhatsAppClient() {
                     processedMessageIds.add(messageId);
                     pruneSet(processedMessageIds, 300);
 
-                    // REGLA 4: FILTRO DE ANTIGÜEDAD: Ignorar mensajes enviados antes del arranque del bot
-                    const msgTime = msg.messageTimestamp ? Number(msg.messageTimestamp) : 0;
-                    if (msgTime > 0 && msgTime < startupTime) {
+                    // REGLA 4: FILTRO DE ANTIGÜEDAD SEGURO: Descartar solo mensajes con más de 5 minutos de antigüedad
+                    const nowSec = Math.floor(Date.now() / 1000);
+                    const rawTimestamp = msg.messageTimestamp;
+                    const msgTime = typeof rawTimestamp === 'object' && rawTimestamp !== null
+                        ? (rawTimestamp.low || Number(rawTimestamp))
+                        : Number(rawTimestamp);
+                    if (msgTime > 0 && (nowSec - msgTime) > 300) {
+                        console.log(`⏳ Ignorando mensaje antiguo de hace ${nowSec - msgTime}s.`);
                         continue;
                     }
 
-                    // Extraer contenido de texto según el tipo de mensaje
+                    // Extraer y desenvolver mensajes (soporte completo para mensajes efímeros, temporales y multimedia)
+                    const actualMessage = msg.message?.ephemeralMessage?.message ||
+                                          msg.message?.viewOnceMessage?.message ||
+                                          msg.message?.viewOnceMessageV2?.message ||
+                                          msg.message?.documentWithCaptionMessage?.message ||
+                                          msg.message;
+
                     const messageContent =
-                        msg.message.conversation ||
-                        msg.message.extendedTextMessage?.text ||
-                        msg.message.imageMessage?.caption ||
-                        msg.message.videoMessage?.caption ||
-                        msg.message.documentMessage?.caption ||
+                        actualMessage?.conversation ||
+                        actualMessage?.extendedTextMessage?.text ||
+                        actualMessage?.imageMessage?.caption ||
+                        actualMessage?.videoMessage?.caption ||
+                        actualMessage?.documentMessage?.caption ||
+                        actualMessage?.buttonsResponseMessage?.selectedButtonId ||
+                        actualMessage?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+                        actualMessage?.templateButtonReplyMessage?.selectedId ||
                         '';
 
                     const isMediaOnly = !messageContent && (
-                        !!msg.message.audioMessage ||
-                        !!msg.message.imageMessage ||
-                        !!msg.message.videoMessage ||
-                        !!msg.message.stickerMessage ||
-                        !!msg.message.documentMessage ||
-                        !!msg.message.contactMessage ||
-                        !!msg.message.locationMessage
+                        !!actualMessage?.audioMessage ||
+                        !!actualMessage?.imageMessage ||
+                        !!actualMessage?.videoMessage ||
+                        !!actualMessage?.stickerMessage ||
+                        !!actualMessage?.documentMessage ||
+                        !!actualMessage?.contactMessage ||
+                        !!actualMessage?.locationMessage
                     );
 
                     const pushName = msg.pushName || 'Cliente';
                     const text = sanitizeInput(messageContent, 1000);
+
+                    // Función auxiliar de envío ultra seguro con fallback directo
+                    const safeSend = async (jid, content) => {
+                        try {
+                            return await sock.sendMessage(jid, content, { quoted: msg });
+                        } catch (err) {
+                            console.warn(`[WhatsApp] Envío con quoted falló, reintentando directo a ${jid}...`);
+                            try {
+                                return await sock.sendMessage(jid, content);
+                            } catch (retryErr) {
+                                console.error(`[WhatsApp Error crítico al enviar a ${jid}]:`, redactSensitiveData(retryErr.message));
+                            }
+                        }
+                    };
 
                     console.log(`\n📩 Mensaje recibido de ${pushName} (${remoteJid}): "${text || '[Archivo Multimedia]'}"`);
 
                     // Comando para reactivar bot si fue silenciado por transferencia
                     if (text === '/reactivar') {
                         mutedChats.delete(remoteJid);
-                        await sock.sendMessage(remoteJid, { text: '✅ Asistente virtual reactivado para este chat.' }, { quoted: msg });
+                        await safeSend(remoteJid, { text: '✅ Asistente virtual Estrella reactivada para este chat.' });
                         continue;
                     }
 
@@ -221,7 +249,7 @@ export async function startWhatsAppClient() {
                         if (scheduleGuard.shouldSendOffHoursNotification(remoteJid)) {
                             const offHoursReply = scheduleGuard.getOffHoursMessage();
                             console.log(`📤 Enviando aviso breve de fuera de horario a ${pushName}...`);
-                            await sock.sendMessage(remoteJid, { text: offHoursReply }, { quoted: msg });
+                            await safeSend(remoteJid, { text: offHoursReply });
                             return;
                         }
 
@@ -233,8 +261,8 @@ export async function startWhatsAppClient() {
                     // 2. CASO MULTIMEDIA SIN TEXTO EN HORARIO LABORAL
                     if (isMediaOnly && !text) {
                         console.log(`📎 Mensaje multimedia sin texto de ${pushName}. Enviando respuesta orientativa...`);
-                        const mediaPrompt = `¡Hola! 👋 Hemos recibido tu archivo. Para brindarte una orientación más ágil y precisa, por favor escríbenos en un mensaje de texto tu nombre y un breve resumen de tu trámite o consulta contable. ¡Con gusto te atenderemos!`;
-                        await sock.sendMessage(remoteJid, { text: mediaPrompt }, { quoted: msg });
+                        const mediaPrompt = `¡Hola! 👋 Hemos recibido tu archivo. Para brindarte una orientación más ágil y precisa, por favor indícanos brevemente en un mensaje de texto qué trámite o consulta contable necesitas resolver. ¡Con gusto te atenderemos!`;
+                        await safeSend(remoteJid, { text: mediaPrompt });
                         return;
                     }
 
@@ -242,8 +270,8 @@ export async function startWhatsAppClient() {
                         return;
                     }
 
-                    // 3. PROCESAMIENTO CON INTELIGENCIA ARTIFICIAL GEMINI
-                    console.log(`🟢 [En Horario] Procesando consulta de ${pushName} con IA Google Gemini...`);
+                    // 3. PROCESAMIENTO CON INTELIGENCIA ARTIFICIAL GEMINI (ESTRELLA)
+                    console.log(`🟢 [En Horario] Procesando consulta de ${pushName} con Estrella (Google Gemini)...`);
 
                     // Indicador de "escribiendo..." en WhatsApp
                     try {
@@ -254,14 +282,14 @@ export async function startWhatsAppClient() {
                         const response = await geminiService.generateResponse(remoteJid, text);
                         console.log(`📤 Enviando respuesta a ${pushName}...`);
 
-                        // Enviar respuesta exacta una sola vez
-                        await sock.sendMessage(remoteJid, { text: response.text }, { quoted: msg });
+                        // Enviar respuesta exacta una sola vez con fallback seguro
+                        await safeSend(remoteJid, { text: response.text });
 
                         // Si hubo solicitud de transferencia a la contadora, silenciar para dar paso al humano
                         if (response.handoff) {
                             mutedChats.add(remoteJid);
                             pruneSet(mutedChats, 100);
-                            console.log(`👤 [Handoff] Chat con ${pushName} transferido a la contadora humana.`);
+                            console.log(`👤 [Handoff] Chat con ${pushName} transferido a la contadora Olga Garcés.`);
                         }
                     } catch (err) {
                         console.error(`❌ Error al responder a ${remoteJid}:`, redactSensitiveData(err.message));
