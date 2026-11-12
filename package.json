@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
+    "postinstall": "node fix-baileys.js",
     "test:security": "node test_security.js",
     "test:server": "node test_server.js",
     "test:schedule": "node test_schedule.js",

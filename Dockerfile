@@ -2,8 +2,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Instalar dependencias de producción
-COPY package*.json ./
+# Instalar dependencias de producción y aplicar parche de Baileys
+COPY package*.json fix-baileys.js ./
 RUN npm install --omit=dev
 
 # Copiar el código fuente

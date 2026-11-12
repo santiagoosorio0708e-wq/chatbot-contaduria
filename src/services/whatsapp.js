@@ -67,7 +67,21 @@ export async function startWhatsAppClient() {
         });
 
         activeSocket = sock;
-        sock.ev.on('creds.update', saveCreds);
+
+        // Asegurar que authState.creds.me siempre tenga un lid definido para prevenir el error de .split(':') en Baileys
+        const ensureLidSafe = () => {
+            if (state.creds?.me) {
+                if (!state.creds.me.lid) {
+                    state.creds.me.lid = state.creds.me.id || '';
+                }
+            }
+        };
+        ensureLidSafe();
+
+        sock.ev.on('creds.update', (update) => {
+            ensureLidSafe();
+            saveCreds();
+        });
 
         // 1. Manejo de Pairing Code si está habilitado y no está registrado
         if (USE_PAIRING_CODE && !sock.authState.creds.registered) {
@@ -134,6 +148,7 @@ export async function startWhatsAppClient() {
                     console.log('❌ Sesión cerrada permanentemente (Logout). Se limpiarán credenciales en el siguiente reinicio.');
                 }
             } else if (connection === 'open') {
+                ensureLidSafe();
                 console.log('\n=============================================================');
                 console.log('✅ ¡CONEXIÓN EXITOSA CON WHATSAPP!');
                 console.log('📌 Bot de Contaduría Pública activo y listo para atender mensajes.');
