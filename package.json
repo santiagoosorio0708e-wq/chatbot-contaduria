@@ -7,7 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "node --max-old-space-size=192 index.js",
+    "start": "node --expose-gc --max-old-space-size=96 --optimize-for-size index.js",
     "dev": "nodemon index.js",
     "test": "node test.js"
   },

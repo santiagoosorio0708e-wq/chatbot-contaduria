@@ -10,7 +10,16 @@ const server = startWebServer();
 // 2. Iniciar cliente de WhatsApp Web en segundo plano
 startWhatsAppClient();
 
-// 3. Manejo de señales de apagado limpio (Render envía SIGTERM durante despliegues)
+// 3. Compactación proactiva de memoria en Node.js para 512MB RAM
+if (typeof global.gc === 'function') {
+    setInterval(() => {
+        try {
+            global.gc();
+        } catch (e) {}
+    }, 60000).unref();
+}
+
+// 4. Manejo de señales de apagado limpio (Render envía SIGTERM durante despliegues)
 let isShuttingDown = false;
 async function gracefulShutdown(signal) {
     if (isShuttingDown) return;

@@ -30,8 +30,8 @@ function cleanupChromeLocks(baseDir) {
     } catch (e) {}
 }
 
-// Estructuras de control en memoria con límites para evitar fugas de memoria (Memory Leaks en 512MB RAM)
-const MAX_STORED_CHATS = 500;
+// Estructuras de control en memoria optimizadas para operar estrictamente dentro de 512MB RAM
+const MAX_STORED_CHATS = 100;
 const mutedChats = new Set();
 const chatHistory = new Map();
 const outOfHoursNotified = new Map();
@@ -43,7 +43,7 @@ const presentationNotified = new Map();
  */
 function pruneMap(map) {
     if (map.size > MAX_STORED_CHATS) {
-        const keysToDelete = Array.from(map.keys()).slice(0, 100);
+        const keysToDelete = Array.from(map.keys()).slice(0, 30);
         for (const k of keysToDelete) {
             map.delete(k);
         }
@@ -57,9 +57,12 @@ let latestQr = null;
 // Capturamos el momento exacto en el que el bot arranca
 const startupTime = Math.floor(Date.now() / 1000);
 
-// Flags optimizados y limpios para ejecutar Chromium en Linux y Docker
-// Incluye --disable-blink-features=AutomationControlled para ocultar navigator.webdriver
-// y prevenir que WhatsApp rechace el emparejamiento con 'no conectado / revise la conexión'
+// Flags de ultra-bajo consumo de memoria para ejecutar Chromium dentro del límite de 512MB de Render
+// - low-end-device-mode: reduce al 50% las asignaciones de memoria interna de Chromium
+// - disk-cache-size y media-cache-size: limitan el caché a 1MB en vez de cientos de megas
+// - no-zygote y disable-gpu: eliminan procesos auxiliares pesados
+// - js-flags: limita el heap V8 a 180MB con compactación de tamaño para WhatsApp Web
+// - disable-blink-features: oculta navigator.webdriver para pasar el filtro de Meta
 const puppeteerArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -70,7 +73,15 @@ const puppeteerArgs = [
     '--disable-gpu',
     '--mute-audio',
     '--no-default-browser-check',
-    '--disable-blink-features=AutomationControlled'
+    '--disable-blink-features=AutomationControlled',
+    '--enable-low-end-device-mode',
+    '--disk-cache-size=1048576',
+    '--media-cache-size=1048576',
+    '--disable-speech-api',
+    '--disable-notifications',
+    '--disable-extensions',
+    '--disable-default-apps',
+    '--js-flags=--max-old-space-size=180 --optimize-for-size'
 ];
 
 let client = null;
@@ -248,8 +259,8 @@ client.on('message', async (message) => {
         history.push({ role: 'user', content: text });
         history.push({ role: 'assistant', content: response.text });
         
-        // Mantener solo los últimos 10 mensajes
-        if (history.length > 10) history = history.slice(-10);
+        // Mantener solo los últimos 6 mensajes para ahorrar memoria
+        if (history.length > 6) history = history.slice(-6);
         
         pruneMap(chatHistory);
         chatHistory.set(chatId, history);
