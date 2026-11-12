@@ -24,6 +24,16 @@ let latestQr = null;
 let latestPairingCode = null;
 let activeSocket = null;
 let isShuttingDown = false;
+let isConnecting = false;
+let reconnectTimeout = null;
+
+function cleanupSocket(sockInstance) {
+    if (!sockInstance) return;
+    try {
+        sockInstance.ev?.removeAllListeners();
+        sockInstance.end(undefined);
+    } catch (e) {}
+}
 
 // Tiempo de arranque del bot (en segundos UNIX)
 // REGLA CLAVE: El bot solo puede escribir después de que se realiza la conexión;
@@ -92,8 +102,30 @@ async function sendLeadSummaryToSelf(sock, remoteJid, pushName, statusReason) {
 }
 
 export async function startWhatsAppClient() {
+    if (isShuttingDown) {
+        console.log('[WhatsApp] Proceso en apagado seguro. Omitiendo inicio.');
+        return;
+    }
+
+    if (isConnecting) {
+        console.log('⏳ Ya hay una inicialización de WhatsApp en progreso. Omitiendo llamada duplicada.');
+        return;
+    }
+
+    isConnecting = true;
+
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
+
+    if (activeSocket) {
+        console.log('🧹 Limpiando conexión previa de WhatsApp antes de iniciar nueva instancia...');
+        cleanupSocket(activeSocket);
+        activeSocket = null;
+    }
+
     console.log('🤖 Iniciando Cliente de WhatsApp con Baileys (Ultra Bajo Consumo de RAM)...');
-    isShuttingDown = false;
     botStatus = 'initializing';
     latestQr = null;
     latestPairingCode = null;
@@ -111,7 +143,7 @@ export async function startWhatsAppClient() {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
             },
-            browser: Browsers.macOS('Chrome'),
+            browser: Browsers.ubuntu('Chrome'),
             printQRInTerminal: false,
             generateHighQualityLinkPreview: false,
             syncFullHistory: false,
@@ -203,6 +235,12 @@ export async function startWhatsAppClient() {
 
             // Manejo de desconexión y reconexión limpia
             if (connection === 'close') {
+                // Remover listeners inmediatamente para evitar callbacks duplicados o eventos zombis
+                cleanupSocket(sock);
+                if (activeSocket === sock) {
+                    activeSocket = null;
+                }
+
                 if (isShuttingDown) {
                     console.log('[WhatsApp] Cierre por apagado seguro del proceso. No se programa reconexión.');
                     botStatus = 'disconnected';
@@ -217,11 +255,16 @@ export async function startWhatsAppClient() {
                 latestQr = null;
                 latestPairingCode = null;
 
+                if (reconnectTimeout) {
+                    clearTimeout(reconnectTimeout);
+                    reconnectTimeout = null;
+                }
+
                 if (statusCode === 515) {
-                    console.log('🔄 [WhatsApp 515] Reinicio requerido tras sincronización inicial de QR. Reconectando en 1.5s...');
-                    setTimeout(() => {
+                    console.log('🔄 [WhatsApp 515] Reinicio requerido tras sincronización inicial de QR. Reconectando limpiamente en 2s...');
+                    reconnectTimeout = setTimeout(() => {
                         startWhatsAppClient();
-                    }, 1500);
+                    }, 2000);
                     return;
                 }
 
@@ -234,18 +277,18 @@ export async function startWhatsAppClient() {
                         console.warn('⚠️ No se pudo eliminar la carpeta de autenticación:', err.message);
                     }
 
-                    // Reinicio automático inmediato para que el usuario pueda escanear un nuevo QR fresco
-                    setTimeout(() => {
+                    // Reinicio automático con margen para generar nuevo QR limpio
+                    reconnectTimeout = setTimeout(() => {
                         console.log('🔄 Reiniciando Baileys para generar nuevo código QR limpio...');
                         startWhatsAppClient();
-                    }, 2000);
+                    }, 2500);
                     return;
                 }
 
                 // Reconexión para otras caídas temporales de red
-                setTimeout(() => {
+                reconnectTimeout = setTimeout(() => {
                     startWhatsAppClient();
-                }, 3000);
+                }, 3500);
             } else if (connection === 'open') {
                 console.log('\n=============================================================');
                 console.log('✅ ¡CONEXIÓN EXITOSA CON WHATSAPP!');
@@ -480,25 +523,32 @@ export async function startWhatsAppClient() {
     } catch (criticalErr) {
         console.error('❌ Error crítico al inicializar Baileys:', redactSensitiveData(criticalErr.message));
         botStatus = 'disconnected';
-        setTimeout(() => {
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+        }
+        reconnectTimeout = setTimeout(() => {
             startWhatsAppClient();
         }, 8000);
+    } finally {
+        isConnecting = false;
     }
 }
 
 export async function stopWhatsAppClient() {
     console.log('[WhatsApp] Cerrando conexión de WhatsApp de forma segura...');
     isShuttingDown = true;
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
     for (const timer of inactivityTimers.values()) {
         clearTimeout(timer);
     }
     inactivityTimers.clear();
-    try {
-        if (activeSocket) {
-            activeSocket.end(undefined);
-            activeSocket = null;
-        }
-    } catch (e) {}
+    if (activeSocket) {
+        cleanupSocket(activeSocket);
+        activeSocket = null;
+    }
 }
 
 export function getBotStatus() {
@@ -516,12 +566,14 @@ export function getLatestPairingCode() {
 // Permite reiniciar manualmente la sesión y forzar un nuevo código QR limpio
 export async function resetWhatsAppSession() {
     console.log('🔄 [Reset Manual] Limpiando credenciales y reiniciando sesión...');
-    try {
-        if (activeSocket) {
-            activeSocket.end(undefined);
-            activeSocket = null;
-        }
-    } catch (e) {}
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
+    if (activeSocket) {
+        cleanupSocket(activeSocket);
+        activeSocket = null;
+    }
 
     try {
         fs.rmSync(AUTH_FOLDER_PATH, { recursive: true, force: true });
