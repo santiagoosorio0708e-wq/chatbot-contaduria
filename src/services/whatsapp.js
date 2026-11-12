@@ -3,7 +3,8 @@ import makeWASocket, {
     DisconnectReason,
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore,
-    Browsers
+    Browsers,
+    jidNormalizedUser
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
@@ -31,10 +32,57 @@ const startupTime = Math.floor(Date.now() / 1000);
 const processedMessageIds = new Set();
 const mutedChats = new Set();
 
+// Control de inactividad de clientes y resúmenes ejecutivos enviados al chat propio ("Tú")
+const inactivityTimers = new Map(); // remoteJid -> NodeJS.Timeout
+const sentSummaries = new Map();    // remoteJid -> { msgCount: number, timestamp: number }
+
 function pruneSet(setInstance, maxItems = 200) {
     if (setInstance.size > maxItems) {
         const toDelete = Array.from(setInstance).slice(0, 50);
         for (const item of toDelete) setInstance.delete(item);
+    }
+}
+
+function pruneMap(mapInstance, maxItems = 200) {
+    if (mapInstance.size > maxItems) {
+        const toDelete = Array.from(mapInstance.keys()).slice(0, 50);
+        for (const item of toDelete) mapInstance.delete(item);
+    }
+}
+
+// Envía el resumen del lead/caso al chat personal de la contadora ("Tú" / Note to Self)
+async function sendLeadSummaryToSelf(sock, remoteJid, pushName, statusReason) {
+    try {
+        if (!sock || !sock.user?.id) return;
+        const myJid = jidNormalizedUser(sock.user.id);
+        if (!myJid) return;
+
+        // Evitar duplicados si el conteo de mensajes no ha cambiado desde el último resumen enviado en menos de 1 hora
+        const currentCount = geminiService.getMessageCount(remoteJid);
+        const previous = sentSummaries.get(remoteJid);
+        if (previous && previous.msgCount === currentCount && (Date.now() - previous.timestamp < 3600000)) {
+            return;
+        }
+
+        console.log(`🔍 [Resumen Lead] Analizando interacción de ${pushName} (${remoteJid}) para notificar a la contadora...`);
+        const summaryText = await geminiService.generateLeadSummary(remoteJid, pushName, statusReason);
+
+        if (!summaryText) {
+            console.log(`ℹ️ [Resumen Lead] ${pushName} no aportó datos contables relevantes. Omitiendo envío a chat propio.`);
+            return;
+        }
+
+        console.log(`📋 Enviando resumen de prospecto al chat propio de WhatsApp ("Tú" - ${myJid})...`);
+        await sock.sendMessage(myJid, { text: summaryText });
+        console.log(`✅ ¡Resumen de ${pushName} entregado exitosamente en el chat "Tú" de la contadora Olga Garcés!`);
+
+        sentSummaries.set(remoteJid, {
+            msgCount: currentCount,
+            timestamp: Date.now()
+        });
+        pruneMap(sentSummaries, 200);
+    } catch (err) {
+        console.error('❌ Error al enviar resumen al chat propio ("Tú"):', redactSensitiveData(err.message));
     }
 }
 
@@ -175,8 +223,18 @@ export async function startWhatsAppClient() {
                     // REGLA 1: Ignorar mensajes enviados por el propio bot para evitar bucles
                     if (msg.key?.fromMe) continue;
 
+                    // REGLA 1.1: Ignorar mensajes del chat privado con uno mismo ("Tú" / Note to Self)
+                    const myJid = sock.user?.id ? jidNormalizedUser(sock.user.id) : null;
+                    if (myJid && (remoteJid === myJid || remoteJid.startsWith(myJid.split('@')[0]))) continue;
+
                     // REGLA 2: Ignorar grupos (@g.us) y estados (status@broadcast)
                     if (remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') continue;
+
+                    // Si el cliente volvió a escribir, reiniciar el temporizador de inactividad
+                    if (inactivityTimers.has(remoteJid)) {
+                        clearTimeout(inactivityTimers.get(remoteJid));
+                        inactivityTimers.delete(remoteJid);
+                    }
 
                     // REGLA 3: Evitar procesar el mismo mensaje dos veces
                     if (processedMessageIds.has(messageId)) continue;
@@ -300,11 +358,25 @@ export async function startWhatsAppClient() {
                         // Enviar respuesta exacta una sola vez con fallback seguro
                         await safeSend(remoteJid, { text: response.text });
 
-                        // Si hubo solicitud de transferencia a la contadora, silenciar para dar paso al humano
+                        // Si hubo solicitud de transferencia a la contadora, silenciar para dar paso al humano y enviar resumen inmediato a "Tú"
                         if (response.handoff) {
                             mutedChats.add(remoteJid);
                             pruneSet(mutedChats, 100);
                             console.log(`👤 [Handoff] Chat con ${pushName} transferido a la contadora Olga Garcés.`);
+                            await sendLeadSummaryToSelf(sock, remoteJid, pushName, 'Cliente continuó la conversación y solicitó hablar con la contadora Olga Garcés');
+                        } else {
+                            // Si el cliente está en conversación, programar temporizador de inactividad (3 minutos)
+                            // Si no continúa respondiendo tras haber aportado datos, se enviará el resumen a su WhatsApp "Tú"
+                            const timer = setTimeout(async () => {
+                                try {
+                                    inactivityTimers.delete(remoteJid);
+                                    await sendLeadSummaryToSelf(sock, remoteJid, pushName, 'El cliente no continuó la conversación tras brindar información inicial (Inactivo)');
+                                } catch (timerErr) {
+                                    console.error('❌ Error en temporizador de inactividad:', redactSensitiveData(timerErr.message));
+                                }
+                            }, 180000); // 3 minutos de inactividad
+                            inactivityTimers.set(remoteJid, timer);
+                            pruneMap(inactivityTimers, 200);
                         }
                     } catch (err) {
                         console.error(`❌ Error al responder a ${remoteJid}:`, redactSensitiveData(err.message));
@@ -330,6 +402,10 @@ export async function startWhatsAppClient() {
 
 export async function stopWhatsAppClient() {
     console.log('[WhatsApp] Cerrando conexión de WhatsApp...');
+    for (const timer of inactivityTimers.values()) {
+        clearTimeout(timer);
+    }
+    inactivityTimers.clear();
     try {
         if (activeSocket) {
             activeSocket.end(undefined);

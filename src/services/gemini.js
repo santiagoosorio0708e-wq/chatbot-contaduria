@@ -101,11 +101,15 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
 
             this.userSessions.set(senderId, {
                 chat,
-                lastInteraction: Date.now()
+                lastInteraction: Date.now(),
+                history: []
             });
         }
 
         const sessionData = this.userSessions.get(senderId);
+        if (!sessionData.history) {
+            sessionData.history = [];
+        }
         sessionData.lastInteraction = Date.now();
         return sessionData.chat;
     }
@@ -126,12 +130,23 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
             };
         }
 
+        // Registrar mensaje del usuario en el historial de la sesión
+        const chat = this.getChatSession(senderId);
+        const sessionData = this.userSessions.get(senderId);
+        if (sessionData && sessionData.history) {
+            sessionData.history.push({ role: 'user', content: message, timestamp: Date.now() });
+        }
+
         // Verificación heurística directa de solicitud de humano para agilidad
-        const humanKeywords = ['hablar con la contadora', 'comunicar con la contadora', 'hablar con un asesor', 'hablar con persona', 'asesor humano', 'hablar con alguien'];
+        const humanKeywords = ['hablar con la contadora', 'comunicar con la contadora', 'hablar con un asesor', 'hablar con persona', 'asesor humano', 'hablar con alguien', 'con olga'];
         const lowerMsg = message.toLowerCase();
         if (humanKeywords.some(kw => lowerMsg.includes(kw))) {
+            const handoffReply = "Entendido, te voy a comunicar con la contadora. En unos momentos ella revisará tu mensaje y te responderá directamente por este medio. ¡Muchas gracias!";
+            if (sessionData && sessionData.history) {
+                sessionData.history.push({ role: 'assistant', content: handoffReply, timestamp: Date.now() });
+            }
             return {
-                text: "Entendido, te voy a comunicar con la contadora. En unos momentos ella revisará tu mensaje y te responderá directamente por este medio. ¡Muchas gracias!",
+                text: handoffReply,
                 handoff: true
             };
         }
@@ -139,7 +154,6 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
         try {
             // Llamada envuelta en Bottleneck para respetar cuotas
             const result = await limiter.schedule(async () => {
-                const chat = this.getChatSession(senderId);
                 return await chat.sendMessage(message);
             });
 
@@ -153,16 +167,28 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
                 if (functionCalls && Array.isArray(functionCalls) && functionCalls.length > 0) {
                     const call = functionCalls.find(fc => fc && fc.name === "transfer_to_human");
                     if (call) {
+                        const transferReply = "Entendido, te voy a comunicar con la contadora. En unos momentos ella revisará tu caso y te responderá por este mismo medio.";
+                        if (sessionData && sessionData.history) {
+                            sessionData.history.push({ role: 'assistant', content: transferReply, timestamp: Date.now() });
+                        }
                         return {
-                            text: "Entendido, te voy a comunicar con la contadora. En unos momentos ella revisará tu caso y te responderá por este mismo medio.",
+                            text: transferReply,
                             handoff: true
                         };
                     }
                 }
 
                 const responseText = result.response.text();
+                const cleanResponse = responseText ? responseText.trim() : "¿Podrías darme más detalles sobre tu consulta contable?";
+                if (sessionData && sessionData.history) {
+                    sessionData.history.push({ role: 'assistant', content: cleanResponse, timestamp: Date.now() });
+                    if (sessionData.history.length > 25) {
+                        sessionData.history = sessionData.history.slice(-25);
+                    }
+                }
+
                 return {
-                    text: responseText ? responseText.trim() : "¿Podrías darme más detalles sobre tu consulta contable?",
+                    text: cleanResponse,
                     handoff: false
                 };
             }
@@ -175,8 +201,8 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
         } catch (error) {
             console.warn(`⚠️ Error en llamada principal de Gemini (${this.modelName}):`, redactSensitiveData(error.message));
 
-            // Modelos de respaldo en caso de saturación temporal o error 503/429
-            const fallbackModels = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+            // Modelos de respaldo de alta disponibilidad
+            const fallbackModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
 
             for (const fallbackModelName of fallbackModels) {
                 if (fallbackModelName === this.modelName) continue;
@@ -187,8 +213,12 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
                         systemInstruction: this.systemInstruction
                     });
                     const result = await fallbackModel.generateContent(message);
+                    const cleanFallbackText = result.response.text().trim();
+                    if (sessionData && sessionData.history) {
+                        sessionData.history.push({ role: 'assistant', content: cleanFallbackText, timestamp: Date.now() });
+                    }
                     return {
-                        text: result.response.text().trim(),
+                        text: cleanFallbackText,
                         handoff: false
                     };
                 } catch (fallbackError) {
@@ -200,6 +230,86 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
                 text: "Hola, gracias por comunicarte con nuestro despacho de Contaduría Pública. En este momento tuvimos una pequeña intermitencia técnica. Por favor déjanos tu consulta y en breve te atenderemos.",
                 handoff: false
             };
+        }
+    }
+
+    getMessageCount(senderId) {
+        const session = this.userSessions.get(senderId);
+        return session?.history ? session.history.length : 0;
+    }
+
+    async generateLeadSummary(senderId, pushName, statusReason) {
+        if (!IS_CONFIGURED || !this.genAI) return null;
+
+        const session = this.userSessions.get(senderId);
+        if (!session || !session.history || session.history.length === 0) {
+            return null;
+        }
+
+        const formattedHistory = session.history
+            .map(m => `${m.role === 'user' ? 'Cliente' : 'Estrella'}: ${m.content}`)
+            .join('\n');
+
+        // Formatear el enlace de WhatsApp si el senderId contiene un número de teléfono
+        let phoneDisplay = senderId;
+        const phoneMatch = senderId.match(/^(\d+)/);
+        if (phoneMatch) {
+            const rawPhone = phoneMatch[1];
+            phoneDisplay = `+${rawPhone} (https://wa.me/${rawPhone})`;
+        }
+
+        const prompt = `Actúa como la secretaria ejecutiva Estrella para la contadora pública Olga Garcés en Colombia.
+Analiza la siguiente conversación sostenida con un cliente en WhatsApp:
+
+DATOS TÉCNICOS:
+- Nombre visible WhatsApp: "${pushName || 'No identificado'}"
+- Identificador/JID: "${senderId}"
+- Contacto WhatsApp: ${phoneDisplay}
+- Situación de la interacción: "${statusReason}"
+
+HISTORIAL DE LA CONVERSACIÓN:
+${formattedHistory}
+
+INSTRUCCIONES CLAVE:
+1. Determina si el cliente ha aportado información contable/tributaria real o un caso concreto (por ejemplo: su nombre, cédula o NIT, ciudad, tipo de contribuyente, trámite que necesita resolver como renta, exógena, balances, saldos a favor, documentos que tiene o consulta tributaria concreta).
+2. Si el cliente ÚNICAMENTE saludó (ej: "hola", "buen día"), envió mensajes vacíos o pruebas, o la conversación no contiene datos contables ni caso que atender, responde ÚNICA Y EXCLUSIVAMENTE con la palabra: NO_LEAD
+3. Si el cliente SÍ aportó información útil o planteó una situación contable, genera un reporte ejecutivo impecable y estructurado para Olga Garcés (que se enviará a su chat personal "Tú") con el siguiente formato exacto:
+
+📋 *NUEVO PROSPECTO / RESUMEN DE CLIENTE*
+
+👤 *Cliente:* [Nombre detectado en la conversación o nombre de WhatsApp]
+📱 *WhatsApp:* ${phoneDisplay}
+🆔 *Cédula / NIT:* [Número de identificación si lo dio, o "No especificado"]
+🏙️ *Ciudad:* [Ciudad si la dio, o "No especificada"]
+🏢 *Contribuyente:* [Persona Natural / Empresa SAS / etc., o "No especificado"]
+📊 *Trámite requerido:* [Declaración de Renta / Exógena / Saldos a favor / Revisoría / Asesoría / etc.]
+📌 *Estado de interacción:* ${statusReason}
+📝 *Resumen del Caso:* [Resumen conciso y muy claro de 2 a 4 líneas de lo que necesita resolver]
+📂 *Documentos / Soportes:* [Documentos mencionados o "Pendientes por solicitar"]
+
+Recuerda: Si no hay información contable relevante, responde solo NO_LEAD sin ningún texto adicional.`;
+
+        try {
+            return await limiter.schedule(async () => {
+                const modelCandidates = [this.modelName, 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+                for (const candidate of modelCandidates) {
+                    try {
+                        const m = this.genAI.getGenerativeModel({ model: candidate });
+                        const res = await m.generateContent(prompt);
+                        const text = res?.response?.text()?.trim();
+                        if (!text || text.includes('NO_LEAD')) {
+                            return null;
+                        }
+                        return text;
+                    } catch (e) {
+                        console.warn(`[Lead Summary Fallback] Falló con ${candidate}:`, redactSensitiveData(e.message));
+                    }
+                }
+                return null;
+            });
+        } catch (err) {
+            console.error('❌ Error al generar resumen con Gemini:', redactSensitiveData(err.message));
+            return null;
         }
     }
 

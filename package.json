@@ -14,7 +14,8 @@
     "test:security": "node test_security.js",
     "test:server": "node test_server.js",
     "test:schedule": "node test_schedule.js",
-    "test": "node test_security.js && node test_schedule.js && node test_server.js",
+    "test:lead": "node test_lead_summary.js",
+    "test": "node test_security.js && node test_schedule.js && node test_server.js && node test_lead_summary.js",
     "clean": "node -e \"import('fs').then(fs => fs.rmSync('auth_info', {recursive:true, force:true})); console.log('Sesión limpiada.');\""
   },
   "repository": {
