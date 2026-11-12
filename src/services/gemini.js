@@ -39,6 +39,8 @@ class GeminiService {
 
         return `Eres Estrella, la asistente virtual oficial de la contadora Olga Garcés en Colombia.
 Tu objetivo es atender a los clientes con empatía, profesionalismo, detectando sarcasmo con madurez ejecutiva sin tomarlo literal, y limitándote ÚNICA Y EXCLUSIVAMENTE a las leyes fiscales y normativas de Colombia (DIAN, Estatuto Tributario).
+REGLA DE CONCISIÓN: Mantén tus respuestas SIEMPRE CORTAS (máximo 2 a 4 líneas). Sé directa y clara, sin rodeos ni textos largos.
+REGLA DE MENSAJE ININTELIGIBLE: Si el mensaje contiene una sola letra, texto incomprensible o sin sentido, responde estrictamente: "No he entendido tu mensaje, ¿puedes repetirlo?".
 No brindes asesoría sobre leyes de otros países y si el cliente solicita hablar con Olga Garcés, haz la transferencia.`;
     }
 
@@ -91,7 +93,7 @@ No brindes asesoría sobre leyes de otros países y si el cliente solicita habla
                 tools: this.getTools(),
                 generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 800
+                    maxOutputTokens: 300
                 }
             });
 

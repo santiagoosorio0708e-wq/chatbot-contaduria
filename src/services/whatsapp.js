@@ -16,7 +16,7 @@ import {
 } from '../config/index.js';
 import { geminiService } from './gemini.js';
 import { scheduleGuard } from '../utils/hours.js';
-import { sanitizeInput, redactSensitiveData } from '../utils/security.js';
+import { sanitizeInput, redactSensitiveData, isPureEmoji, isUnintelligibleOrSingleChar } from '../utils/security.js';
 
 // Estado global para monitoreo y dashboard web
 let botStatus = 'initializing';
@@ -278,6 +278,12 @@ export async function startWhatsAppClient() {
                                           msg.message?.documentWithCaptionMessage?.message ||
                                           msg.message;
 
+                    // REGLA 2.1: Ignorar stickers de WhatsApp
+                    if (actualMessage?.stickerMessage) {
+                        console.log(`🖼️ [Sticker Ignorado] Mensaje de ${msg.pushName || 'Cliente'} es un sticker. Omitiendo.`);
+                        continue;
+                    }
+
                     const messageContent =
                         actualMessage?.conversation ||
                         actualMessage?.extendedTextMessage?.text ||
@@ -289,18 +295,29 @@ export async function startWhatsAppClient() {
                         actualMessage?.templateButtonReplyMessage?.selectedId ||
                         '';
 
-                    const isMediaOnly = !messageContent && (
+                    // REGLA 2.2: Ignorar multimedia sin texto (audios, imágenes, videos, documentos sin pie de foto, contactos, ubicaciones)
+                    const isMediaWithoutText = !messageContent && (
                         !!actualMessage?.audioMessage ||
                         !!actualMessage?.imageMessage ||
                         !!actualMessage?.videoMessage ||
-                        !!actualMessage?.stickerMessage ||
                         !!actualMessage?.documentMessage ||
                         !!actualMessage?.contactMessage ||
-                        !!actualMessage?.locationMessage
+                        !!actualMessage?.locationMessage ||
+                        !!actualMessage?.ptvMessage
                     );
+                    if (isMediaWithoutText) {
+                        console.log(`📎 [Multimedia Sin Texto Ignorada] Mensaje sin texto de ${msg.pushName || 'Cliente'}. Omitiendo respuesta.`);
+                        continue;
+                    }
 
                     const pushName = msg.pushName || 'Cliente';
                     const text = sanitizeInput(messageContent, 1000);
+
+                    // REGLA 2.3: Ignorar si no hay texto o si son únicamente emoticonos / emojis
+                    if (!text || text.trim().length === 0 || isPureEmoji(text)) {
+                        console.log(`😀 [Emoji/Vacío Ignorado] Mensaje de ${pushName} es vacío o solo emoticonos. Omitiendo.`);
+                        continue;
+                    }
 
                     // Función auxiliar de envío ultra seguro con fallback directo
                     const safeSend = async (jid, content) => {
@@ -316,7 +333,15 @@ export async function startWhatsAppClient() {
                         }
                     };
 
-                    console.log(`\n📩 Mensaje recibido de ${pushName} (${remoteJid}): "${text || '[Archivo Multimedia]'}"`);
+                    console.log(`\n📩 Mensaje recibido de ${pushName} (${remoteJid}): "${text}"`);
+
+                    // REGLA 2.4: Si envía una sola letra o una palabra ininteligible:
+                    // "lo unico que debe decir es no he entendido tu mensaje , puedes repetirlo"
+                    if (isUnintelligibleOrSingleChar(text)) {
+                        console.log(`❓ [Ininteligible] Mensaje de ${pushName} ("${text}") es ininteligible o de una sola letra.`);
+                        await safeSend(remoteJid, { text: "No he entendido tu mensaje, ¿puedes repetirlo?" });
+                        continue;
+                    }
 
                     // Comando para reactivar bot si fue silenciado por transferencia
                     if (text === '/reactivar') {
@@ -348,18 +373,6 @@ export async function startWhatsAppClient() {
                         // Si el cliente ya recibió el aviso inicial y ahora envía sus datos, motivo o consulta:
                         // La IA procesa y responde inmediatamente para no perder el hilo ni dejar al cliente en visto.
                         console.log(`🟢 [Fuera de Horario - Continuación] ${pushName} continúa conversando. Procesando con IA...`);
-                    }
-
-                    // 2. CASO MULTIMEDIA SIN TEXTO EN HORARIO LABORAL
-                    if (isMediaOnly && !text) {
-                        console.log(`📎 Mensaje multimedia sin texto de ${pushName}. Enviando respuesta orientativa...`);
-                        const mediaPrompt = `¡Hola! 👋 Hemos recibido tu archivo. Para brindarte una orientación más ágil y precisa, por favor indícanos brevemente en un mensaje de texto qué trámite o consulta contable necesitas resolver. ¡Con gusto te atenderemos!`;
-                        await safeSend(remoteJid, { text: mediaPrompt });
-                        return;
-                    }
-
-                    if (!text || text.trim().length === 0) {
-                        return;
                     }
 
                     // 3. PROCESAMIENTO CON INTELIGENCIA ARTIFICIAL GEMINI (ESTRELLA)

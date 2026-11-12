@@ -204,3 +204,67 @@ export function createRateLimiter(options = {}) {
         return true;
     };
 }
+
+// Regex para identificar emoticonos, emojis compuestos y modificadores Unicode
+export const EMOJI_REGEX = /[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Emoji_Component}\uFE0F\u200D\u20E3\s]/gu;
+
+/**
+ * Comprueba si una cadena contiene únicamente emoticonos/emojis o espacios en blanco.
+ * @param {string} text
+ * @returns {boolean}
+ */
+export function isPureEmoji(text) {
+    if (typeof text !== 'string') return false;
+    const stripped = text.replace(EMOJI_REGEX, '').trim();
+    return stripped.length === 0;
+}
+
+/**
+ * Detecta si un mensaje consiste en una sola letra, caracteres repetidos o palabras ininteligibles (gibberish/teclado).
+ * @param {string} text
+ * @returns {boolean}
+ */
+export function isUnintelligibleOrSingleChar(text) {
+    if (!text || typeof text !== 'string') return true;
+    const clean = text.trim();
+
+    // 1. Longitud de 1 solo carácter (ej: 'a', 'x', '?', '1')
+    if (clean.length <= 1) return true;
+
+    // 2. Solo caracteres idénticos repetidos (ej: 'aaaaa', '.....', 'zzzz')
+    if (/^(.)\1+$/i.test(clean)) return true;
+
+    // 3. Solo signos de puntuación o símbolos sin letras ni números (ej: '???', '...', '!!!', '¿¿')
+    if (/^[\p{P}\p{S}]+$/u.test(clean)) return true;
+
+    // 4. Evaluación de una sola palabra
+    const words = clean.split(/\s+/);
+    if (words.length === 1) {
+        const w = words[0].toLowerCase();
+
+        // Si es puramente numérico pero tiene menos de 6 dígitos (ej: '12', '9', '42')
+        if (/^\d+$/.test(w)) {
+            return w.length < 6;
+        }
+
+        // Palabras legítimas ultra cortas de 2 letras en español:
+        const validTwoLetters = ['si', 'sí', 'no', 'ok', 'ya', 'en', 'de', 'mi', 'un', 'va', 'he', 'ir', 'es', 'al'];
+        if (w.length === 2) {
+            return !validTwoLetters.includes(w);
+        }
+
+        // Si tiene 3 o más letras pero no contiene ninguna vocal (ej: 'sdf', 'qwrt', 'jkl')
+        // En español todas las palabras tienen al menos una vocal
+        if (w.length >= 3 && !/[aeiouáéíóúü]/i.test(w)) {
+            return true;
+        }
+
+        // Patrones típicos de teclado al azar (keyboard smash)
+        const smashPatterns = ['asdf', 'asdfg', 'asdfgh', 'qwerty', 'zxcv', 'qwert', 'lkjh', 'ghjk', 'hjkñ'];
+        if (smashPatterns.some(p => w.includes(p))) {
+            return true;
+        }
+    }
+
+    return false;
+}

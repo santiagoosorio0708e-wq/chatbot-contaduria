@@ -6,7 +6,9 @@ import {
     escapeHtml, 
     serializeForScript, 
     redactSensitiveData,
-    createRateLimiter 
+    createRateLimiter,
+    isPureEmoji,
+    isUnintelligibleOrSingleChar
 } from './src/utils/security.js';
 
 console.log("=== INICIANDO PRUEBAS DE SEGURIDAD Y OPTIMIZACIÓN ===");
@@ -82,6 +84,39 @@ assert.strictEqual(limiter("192.168.1.1"), true, "Req 3 permitida");
 assert.strictEqual(limiter("192.168.1.1"), false, "Req 4 bloqueada por exceder límite");
 assert.strictEqual(limiter("192.168.1.2"), true, "Otra IP diferente debe permitirse");
 console.log("   ✓ Rate limiter funciona correctamente por IP.");
+
+// 9. Prueba de Detección de Mensajes de Solo Emoticonos / Emojis
+console.log("9. Probando filtro de mensajes con solo emoticonos (isPureEmoji)...");
+assert.strictEqual(isPureEmoji("👍"), true, "Emoji simple debe detectarse como puro");
+assert.strictEqual(isPureEmoji("👋😊"), true, "Múltiples emojis deben detectarse como puro");
+assert.strictEqual(isPureEmoji("👍🏼"), true, "Emoji con modificador de piel debe detectarse como puro");
+assert.strictEqual(isPureEmoji("   😂😂😂   "), true, "Emojis con espacios deben ser puro");
+assert.strictEqual(isPureEmoji("Hola 👍"), false, "Texto con emoji no debe considerarse puro emoji");
+assert.strictEqual(isPureEmoji("renta"), false, "Texto puro no es emoji");
+console.log("   ✓ Detección y filtrado de solo emoticonos verificada.");
+
+// 10. Prueba de Detección de Letra Única o Palabras Ininteligibles
+console.log("10. Probando filtro de letra única y palabras ininteligibles (isUnintelligibleOrSingleChar)...");
+assert.strictEqual(isUnintelligibleOrSingleChar("a"), true, "Una sola letra debe ser ininteligible");
+assert.strictEqual(isUnintelligibleOrSingleChar("x"), true, "Una sola letra 'x' debe ser ininteligible");
+assert.strictEqual(isUnintelligibleOrSingleChar("?"), true, "Un solo signo debe ser ininteligible");
+assert.strictEqual(isUnintelligibleOrSingleChar("..."), true, "Puntos suspensivos solos deben ser ininteligibles");
+assert.strictEqual(isUnintelligibleOrSingleChar("????"), true, "Signos solos deben ser ininteligibles");
+assert.strictEqual(isUnintelligibleOrSingleChar("aaaaaa"), true, "Caracteres idénticos repetidos deben ser ininteligibles");
+assert.strictEqual(isUnintelligibleOrSingleChar("zzzz"), true, "Repetidos 'zzzz' deben ser ininteligibles");
+assert.strictEqual(isUnintelligibleOrSingleChar("asdfgh"), true, "Teclazo 'asdfgh' debe ser ininteligible");
+assert.strictEqual(isUnintelligibleOrSingleChar("qwerty"), true, "Teclazo 'qwerty' debe ser ininteligible");
+assert.strictEqual(isUnintelligibleOrSingleChar("sdfgh"), true, "Consonantes sin vocales deben ser ininteligibles");
+assert.strictEqual(isUnintelligibleOrSingleChar("jk"), true, "2 consonantes sin vocales deben ser ininteligibles");
+assert.strictEqual(isUnintelligibleOrSingleChar("42"), true, "Número muy corto sin contexto debe ser ininteligible");
+assert.strictEqual(isUnintelligibleOrSingleChar("ok"), false, "'ok' es palabra válida");
+assert.strictEqual(isUnintelligibleOrSingleChar("si"), false, "'si' es palabra válida");
+assert.strictEqual(isUnintelligibleOrSingleChar("no"), false, "'no' es palabra válida");
+assert.strictEqual(isUnintelligibleOrSingleChar("hola"), false, "'hola' es palabra válida");
+assert.strictEqual(isUnintelligibleOrSingleChar("renta"), false, "'renta' es palabra válida");
+assert.strictEqual(isUnintelligibleOrSingleChar("10203040"), false, "Cédula o número largo es válido");
+assert.strictEqual(isUnintelligibleOrSingleChar("necesito asesoría tributaria"), false, "Frase válida");
+console.log("   ✓ Detección de mensajes ininteligibles y letra única verificada.");
 
 console.log("\n=======================================================");
 console.log("✔ TODAS LAS PRUEBAS DE SEGURIDAD PASARON SATISFACTORIAMENTE");
